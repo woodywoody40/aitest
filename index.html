@@ -566,9 +566,11 @@
                 button.disabled = true;
                 button.classList.remove('hover:bg-gray-500');
             });
+            
+            const correctText = correctAnswer.trim();
 
             // 檢查所選按鈕是否為正確答案
-            if (selectedButton.textContent === correctAnswer) {
+            if (selectedButton.textContent.trim() === correctText) {
                 // 如果正確，僅將其變為綠色
                 selectedButton.classList.add('bg-green-600', 'text-white', 'font-bold');
             } else {
@@ -576,7 +578,7 @@
                 selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
                 // 然後，找到並將正確答案變為綠色
                 allButtons.forEach(button => {
-                    if (button.textContent === correctAnswer) {
+                    if (button.textContent.trim() === correctText) {
                         button.classList.add('bg-green-600', 'text-white', 'font-bold');
                     }
                 });
@@ -592,12 +594,14 @@
             confirmButton.disabled = true;
             confirmButton.classList.add('hidden');
 
+            const trimmedCorrectAnswers = correctAnswers.map(ans => ans.trim());
+
             allLabels.forEach(label => {
                 const checkbox = label.querySelector('input[type="checkbox"]');
-                const optionText = label.querySelector('span').textContent;
+                const optionText = label.querySelector('span').textContent.trim();
                 checkbox.disabled = true;
 
-                const isCorrect = correctAnswers.includes(optionText);
+                const isCorrect = trimmedCorrectAnswers.includes(optionText);
                 const isChecked = checkbox.checked;
 
                 if (isCorrect && isChecked) {
