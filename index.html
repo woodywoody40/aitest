@@ -565,13 +565,21 @@
             allButtons.forEach(button => {
                 button.disabled = true;
                 button.classList.remove('hover:bg-gray-500');
-                if (button.textContent === correctAnswer) {
-                    button.classList.add('bg-green-600', 'text-white', 'font-bold');
-                }
             });
 
-            if (selectedButton.textContent !== correctAnswer) {
+            // 檢查所選按鈕是否為正確答案
+            if (selectedButton.textContent === correctAnswer) {
+                // 如果正確，僅將其變為綠色
+                selectedButton.classList.add('bg-green-600', 'text-white', 'font-bold');
+            } else {
+                // 如果不正確，將所選的變為紅色
                 selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
+                // 然後，找到並將正確答案變為綠色
+                allButtons.forEach(button => {
+                    if (button.textContent === correctAnswer) {
+                        button.classList.add('bg-green-600', 'text-white', 'font-bold');
+                    }
+                });
             }
             
             showExplanationButton(optionsContainer);
