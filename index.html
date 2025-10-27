@@ -1,584 +1,735 @@
-<script>
-    // 設定 pdf.js 的 worker 路徑
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
-
-    const fileUpload = document.getElementById('file-upload');
-    const uploadArea = document.getElementById('upload-area');
-    const uploadText = document.getElementById('upload-text');
-    const fileNameDisplay = document.getElementById('file-name');
-    const apiKeyInput = document.getElementById('api-key');
-    const toggleApiKeyBtn = document.getElementById('toggle-api-key');
-    const eyeIcon = document.getElementById('eye-icon');
-    const eyeOffIcon = document.getElementById('eye-off-icon');
-    const quizTypeSelect = document.getElementById('quiz-type');
-    const numQuestionsSelect = document.getElementById('num-questions');
-    const generateBtn = document.getElementById('generate-btn');
-    const summarizeBtn = document.getElementById('summarize-btn');
-    const quizContainer = document.getElementById('quiz-container');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const errorMessage = document.getElementById('error-message');
-    const errorText = document.getElementById('error-text');
-    const summaryContainer = document.getElementById('summary-container');
-    const summaryContent = document.getElementById('summary-content');
-
-    let fileContent = '';
-    let detectedLanguage = 'Traditional Chinese'; // 預設為繁體中文，避免檢測失敗時亂碼
-
-    // 從 localStorage 載入 API 金鑰
-    function loadApiKeyFromStorage() {
-        const savedKey = localStorage.getItem('geminiApiKey');
-        if (savedKey) {
-            apiKeyInput.value = savedKey;
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 測驗生成器 (Gemini API)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定義樣式 */
+        .dragover {
+            border-color: #6366f1; /* Indigo-500 */
+            background-color: #1f2937; /* Gray-800 */
         }
-    }
-    
-    // 頁面載入時執行
-    document.addEventListener('DOMContentLoaded', loadApiKeyFromStorage);
-
-    // 更新按鈕狀態
-    function updateButtonStates() {
-        const hasContent = fileContent.length > 0;
-        generateBtn.disabled = !hasContent;
-        summarizeBtn.disabled = !hasContent;
-    }
-    
-    // 切換 API 金鑰可見度
-    toggleApiKeyBtn.addEventListener('click', () => {
-        if (apiKeyInput.type === 'password') {
-            apiKeyInput.type = 'text';
-            eyeIcon.classList.add('hidden');
-            eyeOffIcon.classList.remove('hidden');
-        } else {
-            apiKeyInput.type = 'password';
-            eyeIcon.classList.remove('hidden');
-            eyeOffIcon.classList.add('hidden');
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #6366f1;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
         }
-    });
-
-    // 處理檔案拖曳
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, preventDefaults, false);
-    });
-
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    ['dragenter', 'dragover'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
-    });
-
-    ['dragleave', 'drop'].forEach(eventName => {
-        uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
-    });
-
-    uploadArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
-    fileUpload.addEventListener('change', (e) => handleFiles(e.target.files));
-    
-    // 處理檔案上傳（包含 .txt 和 .pdf）
-    async function handleFiles(files) {
-        const file = files[0];
-        if (!file) return;
-
-        resetUIStateForFileUpload(file.name);
-
-        if (file.type === 'text/plain') {
-            await handleTxtFile(file);
-        } else if (file.type === 'application/pdf') {
-            await handlePdfFile(file);
-        } else {
-            showError("不支援的檔案格式。請上傳 .txt 或 .pdf 檔。");
-            resetFileInput();
+        .small-loader {
+             width: 12px;
+             height: 12px;
+             border-width: 3px;
         }
-    }
-    
-    function resetUIStateForFileUpload(fileName) {
-        fileNameDisplay.textContent = fileName;
-        fileContent = '';
-        detectedLanguage = 'Traditional Chinese'; // 重置語言
-        updateButtonStates();
-        hideError();
-        summaryContainer.classList.add('hidden');
-        quizContainer.innerHTML = '';
-    }
-
-    function resetFileInput() {
-         fileUpload.value = ''; 
-         fileNameDisplay.textContent = '';
-         uploadText.textContent = '點擊或拖曳 .txt / .pdf 檔到此處';
-    }
-
-    async function handleTxtFile(file) {
-        uploadText.textContent = '已選擇檔案：';
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            fileContent = e.target.result;
-            await determineFileLanguage(fileContent); // 檢測語言
-            updateButtonStates();
-        };
-        reader.readAsText(file);
-    }
-
-    async function handlePdfFile(file) {
-        uploadText.textContent = '正在讀取 PDF...';
-        try {
-            const text = await readPdfFile(file);
-            fileContent = text;
-            uploadText.textContent = '已讀取 PDF：';
-            await determineFileLanguage(fileContent); // 檢測語言
-            updateButtonStates();
-        } catch (error) {
-            console.error("讀取 PDF 時出錯:", error);
-            showError(`讀取 PDF 檔案時發生錯誤: ${error.message}`);
-            resetFileInput();
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
-    }
-    
-    // ✨ 新增語言檢測功能
-    async function determineFileLanguage(text) {
-        if (!text || text.trim().length === 0) return;
-
-        // 只取文件的前 1000 字元進行檢測
-        const sampleText = text.substring(0, 1000);
-        
-        const prompt = `Based on the following text snippet, what is the primary language? Respond with only the name of the language (e.g., "English", "Traditional Chinese", "Japanese", "French").\n\n---START---\n${sampleText}\n---END---`;
-        const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-        try {
-            // 使用 callGemini 進行語言檢測
-            const language = await callGemini(payload);
-            detectedLanguage = language.trim();
-            console.log(`Detected Language: ${detectedLanguage}`);
-        } catch (error) {
-            console.warn(`Language detection failed, defaulting to 'Traditional Chinese'. Error: ${error.message}`);
-            detectedLanguage = 'Traditional Chinese';
+        /* 隱藏預設的 checkbox 但保持可訪問性 */
+        .custom-checkbox {
+            opacity: 0;
+            width: 0;
+            height: 0;
         }
-    }
-
-    function readPdfFile(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const pdfData = new Uint8Array(event.target.result);
-                    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
-                    let fullText = '';
-                    for (let i = 1; i <= pdf.numPages; i++) {
-                        const page = await pdf.getPage(i);
-                        const textContent = await page.getTextContent();
-                        const pageText = textContent.items.map(item => item.str).join(' ');
-                        fullText += pageText + '\n\n';
-                    }
-                    resolve(fullText.trim());
-                } catch (error) {
-                    reject(error);
-                }
-            };
-            reader.onerror = (error) => reject(error);
-            reader.readAsArrayBuffer(file);
-        });
-    }
-    
-    // 按鈕點擊事件
-    summarizeBtn.addEventListener('click', () => {
-         if (fileContent) summarizeTextWithRetry(fileContent);
-    });
-
-    generateBtn.addEventListener('click', () => {
-         if (fileContent) generateQuizWithRetry(fileContent);
-    });
-
-    // 通用 Gemini API 呼叫函式
-    async function callGemini(payload, retries = 3, delay = 1000) {
-         const userApiKey = apiKeyInput.value.trim();
-         
-         if (userApiKey) {
-             localStorage.setItem('geminiApiKey', userApiKey);
-         }
-
-         const apiKey = userApiKey || ""; 
-         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-
-         try {
-             const response = await fetch(apiUrl, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(payload)
-             });
-
-             if (!response.ok) {
-                 const errorBody = await response.json();
-                 console.error("API Error Response:", errorBody);
-                 if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
-                      throw new Error(`API 金鑰無效，請檢查後再試。`);
-                 }
-                 throw new Error(`API 請求失敗，狀態碼： ${response.status}`);
-             }
-             
-             const result = await response.json();
-             const candidate = result.candidates?.[0];
-             if (candidate?.content?.parts?.[0]?.text) {
-                 return candidate.content.parts[0].text;
-             } else {
-                 console.error("無效的回應結構:", result);
-                 throw new Error("AI 未能生成有效的內容。");
-             }
-         } catch (error) {
-             if (retries > 0 && !error.message.includes('API 金鑰無效')) {
-                 console.log(`正在重試... 剩餘次數: ${retries - 1}`);
-                 await new Promise(res => setTimeout(res, delay));
-                 return callGemini(payload, retries - 1, delay * 2);
-             } else {
-                 throw error;
-             }
-         }
-    }
-
-    // 總結文章功能 (同時使用檢測到的語言)
-    async function summarizeTextWithRetry(text) {
-        loadingIndicator.classList.remove('hidden');
-        summaryContainer.classList.add('hidden');
-        hideError();
-        
-        // ⭐ 使用檢測到的語言來指示摘要的語言 ⭐
-        const promptInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
-            ? '一份簡潔的繁體中文重點摘要' 
-            : `a concise summary in ${detectedLanguage}`;
-
-        const prompt = `請為以下文字生成${promptInstruction}：\n\n${text}`;
-
-        const payload = {
-            contents: [{ parts: [{ text: prompt }] }],
-        };
-        
-        try {
-            const summary = await callGemini(payload);
-            summaryContent.textContent = summary;
-            summaryContainer.classList.remove('hidden');
-        } catch(error) {
-            showError(error.message || "生成摘要時發生未知錯誤。");
-        } finally {
-            loadingIndicator.classList.add('hidden');
+        /* 當 label 被選中時，給予視覺回饋（這裡使用背景色變化） */
+        .options-container label {
+            transition: background-color 0.2s;
         }
-    }
-    
-    // 隨機採樣邏輯 (不變)
-    function selectRandomContent(text, count) {
-        const allParagraphs = text.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0);
-
-        if (allParagraphs.length === 0) return "";
-        
-        if (allParagraphs.length <= count) {
-            for (let i = allParagraphs.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [allParagraphs[i], allParagraphs[j]] = [allParagraphs[j], allParagraphs[i]];
-            }
-            return allParagraphs.join('\n\n');
+        /* 定義多選題選中時的視覺效果 */
+        .options-container input[type="checkbox"]:checked + span {
+            font-weight: bold;
+            color: #fff;
         }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4 sm:p-8">
 
-        let selectedParagraphs = [];
-        let tempArray = [...allParagraphs];
+    <div class="max-w-4xl mx-auto space-y-8">
+        <header class="text-center">
+            <h1 class="text-4xl font-extrabold text-indigo-400">AI 測驗/摘要生成器</h1>
+            <p class="mt-2 text-gray-400">使用 Gemini API，根據您的文件快速生成測驗題或內容摘要。</p>
+        </header>
 
-        for (let i = 0; i < count; i++) {
-            const randomIndex = Math.floor(Math.random() * tempArray.length);
-            selectedParagraphs.push(tempArray[randomIndex]);
-            tempArray.splice(randomIndex, 1);
-        }
-        
-        return selectedParagraphs.join('\n\n');
-    }
+        <div id="error-message" class="hidden bg-red-800/50 border border-red-500 text-red-300 p-4 rounded-lg" role="alert">
+            <p id="error-text" class="font-medium"></p>
+        </div>
 
-    // 生成測驗功能 (使用動態語言指令)
-    async function generateQuizWithRetry(text) {
-        loadingIndicator.classList.remove('hidden');
-        quizContainer.innerHTML = '';
-        hideError();
+        <div class="bg-gray-800 p-6 rounded-xl shadow-lg space-y-6">
+            <h2 class="text-xl font-bold text-white border-b border-gray-700 pb-3">設定與檔案上傳</h2>
 
-        const quizType = quizTypeSelect.value;
-        const numQuestions = parseInt(numQuestionsSelect.value, 10);
-        const sampleCount = (quizType === 'group') ? 10 : Math.max(numQuestions * 3, 5); 
-        
-        const sampledContent = selectRandomContent(text, sampleCount);
-        
-        if (sampledContent.length === 0) {
-            showError("無法從文件中提取有效的題目/段落。請檢查文件內容格式。");
-            loadingIndicator.classList.add('hidden');
-            return;
-        }
-
-        let systemPrompt, schema;
-        
-        // ⭐ 根據檢測到的語言動態調整指令 ⭐
-        const langInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
-            ? '繁體中文' 
-            : detectedLanguage;
-        
-        const mustBeInLang = `All questions, options, and answers must be strictly in ${langInstruction}.`;
-
-        switch (quizType) {
-            case 'multiple':
-                systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} multiple-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are derived from the provided text. Each question must have four options, which may include multiple correct answers. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
-                schema = {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "ARRAY", items: { type: "STRING" } } },
-                        required: ["question", "options", "answer"]
-                    }
-                };
-                break;
-            case 'group':
-                systemPrompt = `You are a professional teacher. First, extract and condense a core paragraph best suited for quizzing, which will serve as the "Reading Material," based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Then, design ${numQuestions} related single-choice questions based on this "Reading Material." Your output must be strictly in JSON format, containing a readingMaterial key and a questions key (whose value is an array of ${numQuestions} question objects). ${mustBeInLang}`;
-                schema = {
-                    type: "OBJECT",
-                    properties: {
-                        readingMaterial: { type: "STRING" },
-                        questions: {
-                            type: "ARRAY",
-                            items: {
-                                type: "OBJECT",
-                                properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
-                                required: ["question", "options", "answer"]
-                            }
-                        }
-                    },
-                    required: ["readingMaterial", "questions"]
-                };
-                break;
-            case 'single':
-            default:
-                systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} single-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are strictly derived from the provided text. Each question must have four options, with only one correct answer. Ensure the questions are highly relevant to the text content. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
-                schema = {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
-                        required: ["question", "options", "answer"]
-                    }
-                };
-                break;
-        }
-
-        const payload = {
-            contents: [{ parts: [{ text: sampledContent }] }], 
-            systemInstruction: { parts: [{ text: systemPrompt }] },
-            generationConfig: { responseMimeType: "application/json", responseSchema: schema }
-        };
-
-        try {
-            const jsonText = await callGemini(payload);
-            const quizData = JSON.parse(jsonText);
-            displayQuiz(quizData, quizType); 
-        } catch (error) {
-            showError(error.message || "生成測驗時發生未知錯誤。");
-        } finally {
-            loadingIndicator.classList.add('hidden');
-        }
-    }
-    
-    // ✨ 答案解釋功能 (同時使用檢測到的語言)
-    async function explainAnswer(button, context, question, answer) {
-         button.disabled = true;
-         button.innerHTML = '<div class="loader small-loader"></div>';
-         
-         const langPrompt = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
-            ? '請用繁體中文解釋' 
-            : `Please explain in ${detectedLanguage}`;
-
-         const prompt = `Based on the source text:\n"""${context}"""\n\n${langPrompt}, why the correct answer for the question "${question}" is "${Array.isArray(answer) ? answer.join(', ') : answer}". Also, briefly explain why the other options are incorrect.`;
-         const payload = { contents: [{ parts: [{ text: prompt }] }] };
-         const explanationTextElement = button.nextElementSibling;
-         
-         try {
-             const explanation = await callGemini(payload);
-             explanationTextElement.textContent = explanation;
-             explanationTextElement.classList.remove('hidden');
-             button.classList.add('hidden');
-         } catch (error) {
-             explanationTextElement.textContent = `無法生成解釋：${error.message}`;
-             explanationTextElement.classList.remove('hidden');
-             explanationTextElement.classList.add('text-red-400');
-             button.innerHTML = '✨ 為什麼？';
-             button.disabled = false;
-         }
-    }
-
-    // 顯示測驗題目 (以下函式沒有變動)
-    function displayQuiz(quizData, quizType) {
-        quizContainer.innerHTML = ''; 
-        if (!quizData) { showError("AI 未能生成有效的題目內容。"); return; }
-
-        const quizHeader = document.createElement('h2');
-        quizHeader.className = 'text-2xl font-bold text-center text-white border-b-2 border-indigo-500 pb-3';
-        quizHeader.textContent = '測驗開始！';
-        quizContainer.appendChild(quizHeader);
-
-        if (quizType === 'group') {
-            displayQuestionGroup(quizData);
-        } else {
-            const questions = Array.isArray(quizData) ? quizData : [];
-            questions.forEach((item, index) => {
-                if (quizType === 'single') displaySingleChoiceQuestion(item, index);
-                else if (quizType === 'multiple') displayMultipleChoiceQuestion(item, index);
-            });
-        }
-    }
-
-    function displayQuestionGroup(data) {
-         if (!data.readingMaterial || !Array.isArray(data.questions)) {
-             showError("題組格式不符。"); return;
-         }
-        const groupContainer = document.createElement('div');
-        groupContainer.className = 'border border-teal-500 rounded-lg p-6 space-y-6';
-        groupContainer.innerHTML = `
-            <h3 class="text-xl font-semibold text-teal-300">閱讀題組</h3>
-            <p class="bg-gray-700/50 p-4 rounded-md text-gray-300 whitespace-pre-wrap">${data.readingMaterial}</p>
-        `;
-        data.questions.forEach((q, index) => {
-            const questionElement = createQuestionElement(q, index, 'single', fileContent);
-            groupContainer.appendChild(questionElement);
-        });
-        quizContainer.appendChild(groupContainer);
-    }
-
-    function displaySingleChoiceQuestion(item, index) {
-        const questionElement = createQuestionElement(item, index, 'single', fileContent);
-        quizContainer.appendChild(questionElement);
-    }
-
-    function displayMultipleChoiceQuestion(item, index) {
-        const questionElement = createQuestionElement(item, index, 'multiple', fileContent);
-        quizContainer.appendChild(questionElement);
-    }
-
-    function createQuestionElement(item, index, type, context) {
-        const element = document.createElement('div');
-        element.className = 'bg-gray-700/50 p-6 rounded-lg shadow-md';
-        
-        let optionsHtml = '';
-        if (type === 'single') {
-             optionsHtml = item.options.map(option => `
-                 <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
-             `).join('');
-        } else { // multiple
-            optionsHtml = item.options.map((option, i) => `
-                <label class="flex items-center p-3 bg-gray-600 rounded-md cursor-pointer hover:bg-gray-500 transition duration-200">
-                    <input type="checkbox" class="custom-checkbox h-5 w-5 rounded bg-gray-800 border-gray-500 text-indigo-600 focus:ring-indigo-500">
-                    <span class="ml-3 text-gray-200">${option}</span>
-                </label>
-            `).join('');
-        }
-
-        element.innerHTML = `
-            <h3 class="text-lg font-semibold text-gray-100 mb-4">${index + 1}. ${item.question}</h3>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 options-container" data-answer="${encodeURIComponent(JSON.stringify(item.answer))}">
-                ${optionsHtml}
+            <div class="space-y-2">
+                <label for="api-key" class="block text-sm font-medium text-gray-300">Gemini API Key (將儲存在本地瀏覽器)</label>
+                <div class="relative">
+                    <input type="password" id="api-key" placeholder="輸入您的 Gemini API Key" 
+                           class="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-indigo-500 focus:border-indigo-500" required>
+                    <button type="button" id="toggle-api-key" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-white">
+                        <svg id="eye-icon" class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                        <svg id="eye-off-icon" class="h-5 w-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.542-7a1.002 1.002 0 011.543-1.057A8.005 8.005 0 0012 17a8.005 8.005 0 007.973-5.232 1.002 1.002 0 011.543 1.057A10.05 10.05 0 0113.875 18.825zM10.5 12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828L19 19M5 5l4.172 4.172"></path></svg>
+                    </button>
+                </div>
             </div>
-            <div class="mt-4">
-                ${type === 'multiple' ? '<button class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 confirm-btn">確認答案</button>' : ''}
-                <button class="hidden text-sm bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-3 rounded-lg transition duration-300 flex items-center gap-2 explain-btn">✨ 為什麼？</button>
-                <div class="hidden bg-gray-900/50 p-3 mt-2 rounded-lg text-gray-400 text-sm whitespace-pre-wrap explanation-content"></div>
+
+            <div id="upload-area" class="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer transition duration-300">
+                <input type="file" id="file-upload" class="hidden" accept=".txt, .pdf">
+                <p id="upload-text" class="text-gray-400">點擊或拖曳 .txt / .pdf 檔到此處</p>
+                <p id="file-name" class="mt-2 text-indigo-400 font-semibold"></p>
             </div>
-        `;
 
-        const optionsContainer = element.querySelector('.options-container');
-        if (type === 'single') {
-            optionsContainer.addEventListener('click', e => {
-                if (e.target.tagName === 'BUTTON') checkSingleAnswer(e.target, item.answer, context);
-            });
-        } else {
-            element.querySelector('.confirm-btn').addEventListener('click', e => {
-                checkMultipleAnswer(e.target, item.answer, context);
-            });
-        }
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label for="quiz-type" class="block text-sm font-medium text-gray-300">測驗類型</label>
+                    <select id="quiz-type" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="single">單選題 (Single Choice)</option>
+                        <option value="multiple">多選題 (Multiple Choice)</option>
+                        <option value="group">閱讀題組 (Reading Comprehension)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="num-questions" class="block text-sm font-medium text-gray-300">題目數量</label>
+                    <select id="num-questions" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-md text-white focus:ring-indigo-500 focus:border-indigo-500">
+                        <option value="5">5 題</option>
+                        <option value="10">10 題</option>
+                        <option value="15">15 題</option>
+                        <option value="20">20 題</option>
+                    </select>
+                </div>
+            </div>
 
-        element.querySelector('.explain-btn').onclick = (e) => explainAnswer(e.target, context, item.question, item.answer);
-
-        return element;
-    }
-
-    // 檢查單選答案 
-    function checkSingleAnswer(selectedButton, correctAnswer, context) {
-        const optionsContainer = selectedButton.parentElement;
-        const allButtons = optionsContainer.querySelectorAll('button');
-        const correctText = correctAnswer.trim();
-
-        allButtons.forEach(button => {
-            button.disabled = true;
-            button.classList.remove('hover:bg-gray-500');
-            button.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-600', 'font-bold');
-            button.classList.add('bg-gray-600');
-        });
+            <div class="flex flex-col sm:flex-row gap-4 pt-4">
+                <button id="summarize-btn" disabled class="flex-1 py-3 px-6 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                    生成摘要
+                </button>
+                <button id="generate-btn" disabled class="flex-1 py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                    生成測驗
+                </button>
+            </div>
+        </div>
         
-        allButtons.forEach(button => {
-            if (button.textContent.trim() === correctText) {
-                button.classList.remove('bg-gray-600'); 
-                button.classList.add('bg-green-600', 'text-white', 'font-bold');
+        <div id="loading-indicator" class="hidden text-center py-6">
+            <div class="loader mx-auto mb-2"></div>
+            <p class="text-indigo-400">AI 正在努力生成中，請稍候...</p>
+        </div>
+
+        <div id="summary-container" class="hidden bg-gray-800 p-6 rounded-xl shadow-lg space-y-4">
+            <h2 class="text-2xl font-bold text-teal-400 border-b border-gray-700 pb-3">文章摘要</h2>
+            <div id="summary-content" class="bg-gray-700/50 p-4 rounded-md text-gray-300 whitespace-pre-wrap"></div>
+        </div>
+
+        <div id="quiz-container" class="space-y-6">
+            </div>
+
+    </div>
+
+    <script>
+        // 設定 pdf.js 的 worker 路徑
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js`;
+
+        const fileUpload = document.getElementById('file-upload');
+        const uploadArea = document.getElementById('upload-area');
+        const uploadText = document.getElementById('upload-text');
+        const fileNameDisplay = document.getElementById('file-name');
+        const apiKeyInput = document.getElementById('api-key');
+        const toggleApiKeyBtn = document.getElementById('toggle-api-key');
+        const eyeIcon = document.getElementById('eye-icon');
+        const eyeOffIcon = document.getElementById('eye-off-icon');
+        const quizTypeSelect = document.getElementById('quiz-type');
+        const numQuestionsSelect = document.getElementById('num-questions');
+        const generateBtn = document.getElementById('generate-btn');
+        const summarizeBtn = document.getElementById('summarize-btn');
+        const quizContainer = document.getElementById('quiz-container');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const summaryContainer = document.getElementById('summary-container');
+        const summaryContent = document.getElementById('summary-content');
+
+        let fileContent = '';
+        // 預設為繁體中文，避免檢測失敗時亂碼
+        let detectedLanguage = 'Traditional Chinese'; 
+
+        // 引入 PDF.js 庫
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+        document.head.appendChild(script);
+
+        // 從 localStorage 載入 API 金鑰
+        function loadApiKeyFromStorage() {
+            const savedKey = localStorage.getItem('geminiApiKey');
+            if (savedKey) {
+                apiKeyInput.value = savedKey;
             }
-        });
-
-        if (selectedButton.textContent.trim() !== correctText) {
-            selectedButton.classList.remove('bg-gray-600');
-            selectedButton.classList.remove('bg-green-600');
-            selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
         }
         
-        showExplanationButton(optionsContainer);
-    }
+        document.addEventListener('DOMContentLoaded', loadApiKeyFromStorage);
 
-    // 檢查多選答案
-    function checkMultipleAnswer(confirmButton, correctAnswers, context) {
-        const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
-        const allLabels = optionsContainer.querySelectorAll('label');
+        // 更新按鈕狀態
+        function updateButtonStates() {
+            const hasContent = fileContent.length > 0;
+            generateBtn.disabled = !hasContent;
+            summarizeBtn.disabled = !hasContent;
+        }
         
-        confirmButton.disabled = true;
-        confirmButton.classList.add('hidden');
-
-        const trimmedCorrectAnswers = Array.isArray(correctAnswers) ? correctAnswers.map(ans => ans.trim()) : [];
-
-        allLabels.forEach(label => {
-            const checkbox = label.querySelector('input[type="checkbox"]');
-            const optionText = label.querySelector('span').textContent.trim();
-            checkbox.disabled = true;
-
-            const isCorrect = trimmedCorrectAnswers.includes(optionText);
-            const isChecked = checkbox.checked;
-
-            label.classList.remove('bg-gray-600', 'hover:bg-gray-500', 'bg-green-600', 'bg-yellow-600', 'bg-red-600', 'font-bold'); 
-            label.classList.add('bg-gray-600'); 
-
-            if (isCorrect) {
-                if (isChecked) {
-                    label.classList.remove('bg-gray-600');
-                    label.classList.add('bg-green-600', 'font-bold'); 
-                } else {
-                    label.classList.remove('bg-gray-600');
-                    label.classList.add('bg-yellow-600', 'font-bold'); 
-                }
+        // 切換 API 金鑰可見度
+        toggleApiKeyBtn.addEventListener('click', () => {
+            if (apiKeyInput.type === 'password') {
+                apiKeyInput.type = 'text';
+                eyeIcon.classList.add('hidden');
+                eyeOffIcon.classList.remove('hidden');
             } else {
-                if (isChecked) {
-                    label.classList.remove('bg-gray-600');
-                    label.classList.add('bg-red-600', 'font-bold'); 
-                }
+                apiKeyInput.type = 'password';
+                eyeIcon.classList.remove('hidden');
+                eyeOffIcon.classList.add('hidden');
             }
         });
 
-        showExplanationButton(optionsContainer);
-    }
-    
-    function showExplanationButton(container) {
-         const questionElement = container.closest('.p-6');
-         questionElement.querySelector('.explain-btn').classList.remove('hidden');
-    }
+        // 處理檔案拖曳 (略)
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
 
-    function showError(message) {
-        errorText.textContent = message;
-        errorMessage.classList.remove('hidden');
-    }
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
 
-    function hideError() {
-        errorMessage.classList.add('hidden');
-    }
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.add('dragover'), false);
+        });
 
-</script>
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('dragover'), false);
+        });
+
+        uploadArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
+        fileUpload.addEventListener('change', (e) => handleFiles(e.target.files));
+        
+        // 處理檔案上傳
+        async function handleFiles(files) {
+            const file = files[0];
+            if (!file) return;
+
+            resetUIStateForFileUpload(file.name);
+
+            if (file.type === 'text/plain') {
+                await handleTxtFile(file);
+            } else if (file.type === 'application/pdf') {
+                await handlePdfFile(file);
+            } else {
+                showError("不支援的檔案格式。請上傳 .txt 或 .pdf 檔。");
+                resetFileInput();
+            }
+        }
+        
+        function resetUIStateForFileUpload(fileName) {
+            fileNameDisplay.textContent = fileName;
+            fileContent = '';
+            detectedLanguage = 'Traditional Chinese'; // 重置語言
+            updateButtonStates();
+            hideError();
+            summaryContainer.classList.add('hidden');
+            quizContainer.innerHTML = '';
+        }
+
+        function resetFileInput() {
+             fileUpload.value = ''; 
+             fileNameDisplay.textContent = '';
+             uploadText.textContent = '點擊或拖曳 .txt / .pdf 檔到此處';
+        }
+
+        async function handleTxtFile(file) {
+            uploadText.textContent = '已選擇檔案：';
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                fileContent = e.target.result;
+                await determineFileLanguage(fileContent); // 檢測語言
+                updateButtonStates();
+            };
+            reader.readAsText(file);
+        }
+
+        async function handlePdfFile(file) {
+            uploadText.textContent = '正在讀取 PDF...';
+            try {
+                const text = await readPdfFile(file);
+                fileContent = text;
+                uploadText.textContent = '已讀取 PDF：';
+                await determineFileLanguage(fileContent); // 檢測語言
+                updateButtonStates();
+            } catch (error) {
+                console.error("讀取 PDF 時出錯:", error);
+                showError(`讀取 PDF 檔案時發生錯誤: ${error.message}`);
+                resetFileInput();
+            }
+        }
+        
+        // ✨ 語言檢測功能
+        async function determineFileLanguage(text) {
+            if (!text || text.trim().length === 0) return;
+
+            const sampleText = text.substring(0, 1000);
+            
+            // 嘗試使用較簡潔的指令來檢測語言
+            const prompt = `What is the primary language of the following text? Respond with ONLY the name of the language (e.g., "English", "Traditional Chinese", "Japanese").\n\n---START---\n${sampleText}\n---END---`;
+            const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+            try {
+                const language = await callGemini(payload);
+                // 對結果進行清理，並大寫第一個字母
+                detectedLanguage = language.trim().charAt(0).toUpperCase() + language.trim().slice(1);
+                console.log(`Detected Language: ${detectedLanguage}`);
+            } catch (error) {
+                console.warn(`Language detection failed, defaulting to 'Traditional Chinese'. Error: ${error.message}`);
+                detectedLanguage = 'Traditional Chinese';
+            }
+        }
+
+        function readPdfFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        // 確保 pdfjsLib 已載入
+                        if (typeof pdfjsLib === 'undefined' || !pdfjsLib.getDocument) {
+                             reject(new Error("PDF.js 尚未完全載入。請稍後再試。"));
+                             return;
+                        }
+                        const pdfData = new Uint8Array(event.target.result);
+                        const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+                        let fullText = '';
+                        for (let i = 1; i <= pdf.numPages; i++) {
+                            const page = await pdf.getPage(i);
+                            const textContent = await page.getTextContent();
+                            const pageText = textContent.items.map(item => item.str).join(' ');
+                            fullText += pageText + '\n\n';
+                        }
+                        resolve(fullText.trim());
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = (error) => reject(error);
+                reader.readAsArrayBuffer(file);
+            });
+        }
+        
+        // 按鈕點擊事件
+        summarizeBtn.addEventListener('click', () => {
+             if (fileContent) summarizeTextWithRetry(fileContent);
+        });
+
+        generateBtn.addEventListener('click', () => {
+             if (fileContent) generateQuizWithRetry(fileContent);
+        });
+
+        // 通用 Gemini API 呼叫函式
+        async function callGemini(payload, retries = 3, delay = 1000) {
+             const userApiKey = apiKeyInput.value.trim();
+             
+             if (!userApiKey) {
+                throw new Error("API 金鑰為空，請輸入您的 Gemini API Key。");
+             }
+
+             if (userApiKey) {
+                 localStorage.setItem('geminiApiKey', userApiKey);
+             }
+
+             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${userApiKey}`;
+
+             try {
+                 const response = await fetch(apiUrl, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify(payload)
+                 });
+
+                 if (!response.ok) {
+                     const errorBody = await response.json();
+                     console.error("API Error Response:", errorBody);
+                     if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
+                          throw new Error(`API 金鑰無效，請檢查後再試。`);
+                     }
+                     if (response.status === 403) {
+                          throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
+                     }
+                     throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
+                 }
+                 
+                 const result = await response.json();
+                 const candidate = result.candidates?.[0];
+                 if (candidate?.content?.parts?.[0]?.text) {
+                     return candidate.content.parts[0].text;
+                 } else {
+                     console.error("無效的回應結構:", result);
+                     throw new Error("AI 未能生成有效的內容。");
+                 }
+             } catch (error) {
+                 if (retries > 0 && !error.message.includes('API 金鑰無效') && !error.message.includes('403 Forbidden')) {
+                     console.log(`正在重試... 剩餘次數: ${retries - 1}`);
+                     await new Promise(res => setTimeout(res, delay));
+                     return callGemini(payload, retries - 1, delay * 2);
+                 } else {
+                     throw error;
+                 }
+             }
+        }
+
+        // 總結文章功能
+        async function summarizeTextWithRetry(text) {
+            loadingIndicator.classList.remove('hidden');
+            summaryContainer.classList.add('hidden');
+            hideError();
+            
+            // 使用檢測到的語言來指示摘要的語言
+            const promptInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+                ? '一份簡潔的繁體中文重點摘要' 
+                : `a concise summary in ${detectedLanguage}`;
+
+            const prompt = `請為以下文字生成${promptInstruction}：\n\n${text}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: prompt }] }],
+            };
+            
+            try {
+                const summary = await callGemini(payload);
+                summaryContent.textContent = summary;
+                summaryContainer.classList.remove('hidden');
+            } catch(error) {
+                showError(error.message || "生成摘要時發生未知錯誤。");
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+        
+        // 隨機採樣邏輯 (不變)
+        function selectRandomContent(text, count) {
+            const allParagraphs = text.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0);
+
+            if (allParagraphs.length === 0) return "";
+            
+            if (allParagraphs.length <= count) {
+                for (let i = allParagraphs.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allParagraphs[i], allParagraphs[j]] = [allParagraphs[j], allParagraphs[i]];
+                }
+                return allParagraphs.join('\n\n');
+            }
+
+            let selectedParagraphs = [];
+            let tempArray = [...allParagraphs];
+
+            for (let i = 0; i < count; i++) {
+                const randomIndex = Math.floor(Math.random() * tempArray.length);
+                selectedParagraphs.push(tempArray[randomIndex]);
+                tempArray.splice(randomIndex, 1);
+            }
+            
+            return selectedParagraphs.join('\n\n');
+        }
+
+        // 生成測驗功能 (使用動態語言指令)
+        async function generateQuizWithRetry(text) {
+            loadingIndicator.classList.remove('hidden');
+            quizContainer.innerHTML = '';
+            hideError();
+
+            const quizType = quizTypeSelect.value;
+            const numQuestions = parseInt(numQuestionsSelect.value, 10);
+            const sampleCount = (quizType === 'group') ? 10 : Math.max(numQuestions * 3, 5); 
+            
+            const sampledContent = selectRandomContent(text, sampleCount);
+            
+            if (sampledContent.length === 0) {
+                showError("無法從文件中提取有效的題目/段落。請檢查文件內容格式。");
+                loadingIndicator.classList.add('hidden');
+                return;
+            }
+
+            let systemPrompt, schema;
+            
+            // 根據檢測到的語言動態調整指令
+            const langInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+                ? '繁體中文' 
+                : detectedLanguage;
+            
+            const mustBeInLang = `All questions, reading material, options, and answers must be strictly in ${langInstruction}.`;
+
+            switch (quizType) {
+                case 'multiple':
+                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} multiple-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are derived from the provided text. Each question must have four options, which may include multiple correct answers. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
+                    schema = {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "ARRAY", items: { type: "STRING" } } },
+                            required: ["question", "options", "answer"]
+                        }
+                    };
+                    break;
+                case 'group':
+                    systemPrompt = `You are a professional teacher. First, extract and condense a core paragraph best suited for quizzing, which will serve as the "Reading Material," based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Then, design ${numQuestions} related single-choice questions based on this "Reading Material." Your output must be strictly in JSON format, containing a readingMaterial key and a questions key (whose value is an array of ${numQuestions} question objects). ${mustBeInLang}`;
+                    schema = {
+                        type: "OBJECT",
+                        properties: {
+                            readingMaterial: { type: "STRING" },
+                            questions: {
+                                type: "ARRAY",
+                                items: {
+                                    type: "OBJECT",
+                                    properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
+                                    required: ["question", "options", "answer"]
+                                }
+                            }
+                        },
+                        required: ["readingMaterial", "questions"]
+                    };
+                    break;
+                case 'single':
+                default:
+                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} single-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are strictly derived from the provided text. Each question must have four options, with only one correct answer. Ensure the questions are highly relevant to the text content. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
+                    schema = {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
+                            required: ["question", "options", "answer"]
+                        }
+                    };
+                    break;
+            }
+
+            const payload = {
+                contents: [{ parts: [{ text: sampledContent }] }], 
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+            };
+
+            try {
+                const jsonText = await callGemini(payload);
+                const quizData = JSON.parse(jsonText);
+                displayQuiz(quizData, quizType); 
+            } catch (error) {
+                showError(error.message || "生成測驗時發生未知錯誤。");
+            } finally {
+                loadingIndicator.classList.add('hidden');
+            }
+        }
+        
+        // 答案解釋功能
+        async function explainAnswer(button, context, question, answer) {
+             button.disabled = true;
+             button.innerHTML = '<div class="loader small-loader"></div>';
+             
+             const langPrompt = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+                ? '請用繁體中文解釋' 
+                : `Please explain in ${detectedLanguage}`;
+
+             const prompt = `Based on the source text:\n"""${context}"""\n\n${langPrompt}, why the correct answer for the question "${question}" is "${Array.isArray(answer) ? answer.join(', ') : answer}". Also, briefly explain why the other options are incorrect.`;
+             const payload = { contents: [{ parts: [{ text: prompt }] }] };
+             const explanationTextElement = button.nextElementSibling;
+             
+             try {
+                 const explanation = await callGemini(payload);
+                 explanationTextElement.textContent = explanation;
+                 explanationTextElement.classList.remove('hidden');
+                 button.classList.add('hidden');
+             } catch (error) {
+                 explanationTextElement.textContent = `無法生成解釋：${error.message}`;
+                 explanationTextElement.classList.remove('hidden');
+                 explanationTextElement.classList.add('text-red-400');
+                 button.innerHTML = '✨ 為什麼？';
+                 button.disabled = false;
+             }
+        }
+
+        // 顯示測驗題目 (不變)
+        function displayQuiz(quizData, quizType) {
+            quizContainer.innerHTML = ''; 
+            if (!quizData) { showError("AI 未能生成有效的題目內容。"); return; }
+
+            const quizHeader = document.createElement('h2');
+            quizHeader.className = 'text-2xl font-bold text-center text-white border-b-2 border-indigo-500 pb-3';
+            quizHeader.textContent = '測驗開始！';
+            quizContainer.appendChild(quizHeader);
+
+            if (quizType === 'group') {
+                displayQuestionGroup(quizData);
+            } else {
+                const questions = Array.isArray(quizData) ? quizData : [];
+                questions.forEach((item, index) => {
+                    if (quizType === 'single') displaySingleChoiceQuestion(item, index);
+                    else if (quizType === 'multiple') displayMultipleChoiceQuestion(item, index);
+                });
+            }
+        }
+
+        function displayQuestionGroup(data) {
+             if (!data.readingMaterial || !Array.isArray(data.questions)) {
+                 showError("題組格式不符。"); return;
+             }
+            const groupContainer = document.createElement('div');
+            groupContainer.className = 'border border-teal-500 rounded-lg p-6 space-y-6';
+            groupContainer.innerHTML = `
+                <h3 class="text-xl font-semibold text-teal-300">閱讀題組</h3>
+                <p class="bg-gray-700/50 p-4 rounded-md text-gray-300 whitespace-pre-wrap">${data.readingMaterial}</p>
+            `;
+            data.questions.forEach((q, index) => {
+                const questionElement = createQuestionElement(q, index, 'single', fileContent);
+                groupContainer.appendChild(questionElement);
+            });
+            quizContainer.appendChild(groupContainer);
+        }
+
+        function displaySingleChoiceQuestion(item, index) {
+            const questionElement = createQuestionElement(item, index, 'single', fileContent);
+            quizContainer.appendChild(questionElement);
+        }
+
+        function displayMultipleChoiceQuestion(item, index) {
+            const questionElement = createQuestionElement(item, index, 'multiple', fileContent);
+            quizContainer.appendChild(questionElement);
+        }
+
+        function createQuestionElement(item, index, type, context) {
+            const element = document.createElement('div');
+            element.className = 'bg-gray-700/50 p-6 rounded-lg shadow-md';
+            
+            let optionsHtml = '';
+            if (type === 'single') {
+                 optionsHtml = item.options.map(option => `
+                     <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
+                 `).join('');
+            } else { // multiple
+                optionsHtml = item.options.map((option, i) => `
+                    <label class="flex items-center p-3 bg-gray-600 rounded-md cursor-pointer hover:bg-gray-500 transition duration-200">
+                        <input type="checkbox" class="custom-checkbox h-5 w-5 rounded bg-gray-800 border-gray-500 text-indigo-600 focus:ring-indigo-500">
+                        <span class="ml-3 text-gray-200">${option}</span>
+                    </label>
+                `).join('');
+            }
+
+            element.innerHTML = `
+                <h3 class="text-lg font-semibold text-gray-100 mb-4">${index + 1}. ${item.question}</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 options-container" data-answer="${encodeURIComponent(JSON.stringify(item.answer))}">
+                    ${optionsHtml}
+                </div>
+                <div class="mt-4">
+                    ${type === 'multiple' ? '<button class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-300 confirm-btn">確認答案</button>' : ''}
+                    <button class="hidden text-sm bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2 px-3 rounded-lg transition duration-300 flex items-center gap-2 explain-btn">✨ 為什麼？</button>
+                    <div class="hidden bg-gray-900/50 p-3 mt-2 rounded-lg text-gray-400 text-sm whitespace-pre-wrap explanation-content"></div>
+                </div>
+            `;
+
+            const optionsContainer = element.querySelector('.options-container');
+            if (type === 'single') {
+                optionsContainer.addEventListener('click', e => {
+                    if (e.target.tagName === 'BUTTON') checkSingleAnswer(e.target, item.answer, context);
+                });
+            } else {
+                element.querySelector('.confirm-btn').addEventListener('click', e => {
+                    checkMultipleAnswer(e.target, item.answer, context);
+                });
+            }
+
+            element.querySelector('.explain-btn').onclick = (e) => explainAnswer(e.target, context, item.question, item.answer);
+
+            return element;
+        }
+
+        // 檢查單選答案 (顏色邏輯已修正)
+        function checkSingleAnswer(selectedButton, correctAnswer, context) {
+            const optionsContainer = selectedButton.parentElement;
+            const allButtons = optionsContainer.querySelectorAll('button');
+            const correctText = correctAnswer.trim();
+
+            allButtons.forEach(button => {
+                button.disabled = true;
+                button.classList.remove('hover:bg-gray-500');
+                button.classList.remove('bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-gray-600', 'font-bold');
+                button.classList.add('bg-gray-600');
+            });
+            
+            // 標記正確答案 (綠色)
+            allButtons.forEach(button => {
+                if (button.textContent.trim() === correctText) {
+                    button.classList.remove('bg-gray-600'); 
+                    button.classList.add('bg-green-600', 'text-white', 'font-bold');
+                }
+            });
+
+            // 檢查並標記使用者選擇的答案
+            if (selectedButton.textContent.trim() !== correctText) {
+                // 如果所選的不正確，則將其標記為紅色 (錯選)
+                selectedButton.classList.remove('bg-gray-600');
+                selectedButton.classList.remove('bg-green-600');
+                selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
+            }
+            
+            showExplanationButton(optionsContainer);
+        }
+
+        // 檢查多選答案 (顏色邏輯已修正)
+        function checkMultipleAnswer(confirmButton, correctAnswers, context) {
+            const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
+            const allLabels = optionsContainer.querySelectorAll('label');
+            
+            confirmButton.disabled = true;
+            confirmButton.classList.add('hidden');
+
+            const trimmedCorrectAnswers = Array.isArray(correctAnswers) ? correctAnswers.map(ans => ans.trim()) : [];
+
+            allLabels.forEach(label => {
+                const checkbox = label.querySelector('input[type="checkbox"]');
+                const optionText = label.querySelector('span').textContent.trim();
+                checkbox.disabled = true;
+
+                const isCorrect = trimmedCorrectAnswers.includes(optionText);
+                const isChecked = checkbox.checked;
+
+                label.classList.remove('bg-gray-600', 'hover:bg-gray-500', 'bg-green-600', 'bg-yellow-600', 'bg-red-600', 'font-bold'); 
+                label.classList.add('bg-gray-600'); // 預設灰色
+
+                if (isCorrect) {
+                    if (isChecked) {
+                        // 答對 (正確且選中) - 綠色
+                        label.classList.remove('bg-gray-600');
+                        label.classList.add('bg-green-600', 'font-bold'); 
+                    } else {
+                        // 漏選 (正確但未選) - 黃色
+                        label.classList.remove('bg-gray-600');
+                        label.classList.add('bg-yellow-600', 'font-bold'); 
+                    }
+                } else {
+                    if (isChecked) {
+                        // 誤選 (錯誤但選中) - 紅色
+                        label.classList.remove('bg-gray-600');
+                        label.classList.add('bg-red-600', 'font-bold'); 
+                    }
+                    // 錯誤且未選中：保持預設灰色 (bg-gray-600)
+                }
+            });
+
+            showExplanationButton(optionsContainer);
+        }
+        
+        function showExplanationButton(container) {
+             const questionElement = container.closest('.p-6');
+             questionElement.querySelector('.explain-btn').classList.remove('hidden');
+        }
+
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>
