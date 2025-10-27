@@ -22,6 +22,7 @@
     const summaryContent = document.getElementById('summary-content');
 
     let fileContent = '';
+    let detectedLanguage = 'Traditional Chinese'; // 預設為繁體中文，避免檢測失敗時亂碼
 
     // 從 localStorage 載入 API 金鑰
     function loadApiKeyFromStorage() {
@@ -83,7 +84,7 @@
         resetUIStateForFileUpload(file.name);
 
         if (file.type === 'text/plain') {
-            handleTxtFile(file);
+            await handleTxtFile(file);
         } else if (file.type === 'application/pdf') {
             await handlePdfFile(file);
         } else {
@@ -95,6 +96,7 @@
     function resetUIStateForFileUpload(fileName) {
         fileNameDisplay.textContent = fileName;
         fileContent = '';
+        detectedLanguage = 'Traditional Chinese'; // 重置語言
         updateButtonStates();
         hideError();
         summaryContainer.classList.add('hidden');
@@ -107,11 +109,12 @@
          uploadText.textContent = '點擊或拖曳 .txt / .pdf 檔到此處';
     }
 
-    function handleTxtFile(file) {
+    async function handleTxtFile(file) {
         uploadText.textContent = '已選擇檔案：';
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (e) => {
             fileContent = e.target.result;
+            await determineFileLanguage(fileContent); // 檢測語言
             updateButtonStates();
         };
         reader.readAsText(file);
@@ -123,11 +126,33 @@
             const text = await readPdfFile(file);
             fileContent = text;
             uploadText.textContent = '已讀取 PDF：';
+            await determineFileLanguage(fileContent); // 檢測語言
             updateButtonStates();
         } catch (error) {
             console.error("讀取 PDF 時出錯:", error);
             showError(`讀取 PDF 檔案時發生錯誤: ${error.message}`);
             resetFileInput();
+        }
+    }
+    
+    // ✨ 新增語言檢測功能
+    async function determineFileLanguage(text) {
+        if (!text || text.trim().length === 0) return;
+
+        // 只取文件的前 1000 字元進行檢測
+        const sampleText = text.substring(0, 1000);
+        
+        const prompt = `Based on the following text snippet, what is the primary language? Respond with only the name of the language (e.g., "English", "Traditional Chinese", "Japanese", "French").\n\n---START---\n${sampleText}\n---END---`;
+        const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+        try {
+            // 使用 callGemini 進行語言檢測
+            const language = await callGemini(payload);
+            detectedLanguage = language.trim();
+            console.log(`Detected Language: ${detectedLanguage}`);
+        } catch (error) {
+            console.warn(`Language detection failed, defaulting to 'Traditional Chinese'. Error: ${error.message}`);
+            detectedLanguage = 'Traditional Chinese';
         }
     }
 
@@ -172,7 +197,7 @@
              localStorage.setItem('geminiApiKey', userApiKey);
          }
 
-         const apiKey = userApiKey || ""; // 優先使用使用者金鑰
+         const apiKey = userApiKey || ""; 
          const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
          try {
@@ -210,14 +235,21 @@
          }
     }
 
-    // ✨ 總結文章功能
+    // 總結文章功能 (同時使用檢測到的語言)
     async function summarizeTextWithRetry(text) {
         loadingIndicator.classList.remove('hidden');
         summaryContainer.classList.add('hidden');
         hideError();
         
+        // ⭐ 使用檢測到的語言來指示摘要的語言 ⭐
+        const promptInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+            ? '一份簡潔的繁體中文重點摘要' 
+            : `a concise summary in ${detectedLanguage}`;
+
+        const prompt = `請為以下文字生成${promptInstruction}：\n\n${text}`;
+
         const payload = {
-            contents: [{ parts: [{ text: `請為以下文字生成一份簡潔的繁體中文重點摘要：\n\n${text}` }] }],
+            contents: [{ parts: [{ text: prompt }] }],
         };
         
         try {
@@ -231,28 +263,13 @@
         }
     }
     
-    // ------------------------------------------------------------------
-    // ⭐ 修正隨機採樣邏輯 (保留上次提交的隨機採樣功能) ⭐
-    // ------------------------------------------------------------------
-    /**
-     * 將文本分割成獨立的段落/題目，並隨機選取指定數量後重新組合。
-     * @param {string} text 原始文本內容。
-     * @param {number} count 需要選取的段落數量。
-     * @returns {string} 隨機選取並組合成的新文本。
-     */
+    // 隨機採樣邏輯 (不變)
     function selectRandomContent(text, count) {
-        // 1. 分割成題目/段落陣列 (以一個或多個換行符分隔)
         const allParagraphs = text.split(/\n+/).map(p => p.trim()).filter(p => p.length > 0);
 
-        if (allParagraphs.length === 0) {
-            console.warn("文本中沒有可用的段落。");
-            return "";
-        }
+        if (allParagraphs.length === 0) return "";
         
-        // 如果總段落數少於或等於所需的數量，則全部選取並隨機打亂
         if (allParagraphs.length <= count) {
-            console.log("段落數不足，將打亂並使用全部段落。");
-            // 執行 Fisher-Yates 亂數排序法
             for (let i = allParagraphs.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [allParagraphs[i], allParagraphs[j]] = [allParagraphs[j], allParagraphs[i]];
@@ -260,26 +277,19 @@
             return allParagraphs.join('\n\n');
         }
 
-        // 2. 隨機選取 count 個段落
         let selectedParagraphs = [];
-        let tempArray = [...allParagraphs]; // 複製陣列，避免修改原陣列
+        let tempArray = [...allParagraphs];
 
         for (let i = 0; i < count; i++) {
-            // 從剩下的段落中隨機選一個索引
             const randomIndex = Math.floor(Math.random() * tempArray.length);
-            
-            // 將選中的段落移到結果陣列
             selectedParagraphs.push(tempArray[randomIndex]);
-            
-            // 從臨時陣列中移除已選中的段落，確保不會重複選取
             tempArray.splice(randomIndex, 1);
         }
         
-        // 3. 重新組合，用雙換行分隔
         return selectedParagraphs.join('\n\n');
     }
 
-    // 生成測驗功能 (使用隨機採樣)
+    // 生成測驗功能 (使用動態語言指令)
     async function generateQuizWithRetry(text) {
         loadingIndicator.classList.remove('hidden');
         quizContainer.innerHTML = '';
@@ -287,7 +297,6 @@
 
         const quizType = quizTypeSelect.value;
         const numQuestions = parseInt(numQuestionsSelect.value, 10);
-        // 採樣數量：題數的 3 倍，或題組為 10 個段落
         const sampleCount = (quizType === 'group') ? 10 : Math.max(numQuestions * 3, 5); 
         
         const sampledContent = selectRandomContent(text, sampleCount);
@@ -299,10 +308,17 @@
         }
 
         let systemPrompt, schema;
+        
+        // ⭐ 根據檢測到的語言動態調整指令 ⭐
+        const langInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+            ? '繁體中文' 
+            : detectedLanguage;
+        
+        const mustBeInLang = `All questions, options, and answers must be strictly in ${langInstruction}.`;
 
         switch (quizType) {
             case 'multiple':
-                systemPrompt = `您是一位專業的教師，您的任務是根據提供的「隨機採樣文本」（約 ${sampleCount} 個段落），生成 ${numQuestions} 個繁體中文的多選題。**請確保您的所有問題都來自於這段提供的文本中。**每個問題必須有四個選項，其中可能有多個正確答案。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} multiple-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are derived from the provided text. Each question must have four options, which may include multiple correct answers. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
                 schema = {
                     type: "ARRAY",
                     items: {
@@ -313,7 +329,7 @@
                 };
                 break;
             case 'group':
-                systemPrompt = `您是一位專業的教師。請先根據提供的「隨機採樣文本」（約 ${sampleCount} 個段落），濃縮並擷取一段最適合出題的核心段落作為「閱讀材料」。然後，根據這段「閱讀材料」，設計 ${numQuestions} 道相關的繁體中文單選題。您的輸出必須是嚴格的JSON格式，包含一個 readingMaterial 鍵和一個 questions 鍵（其值為包含 ${numQuestions} 個問題物件的陣列）。`;
+                systemPrompt = `You are a professional teacher. First, extract and condense a core paragraph best suited for quizzing, which will serve as the "Reading Material," based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Then, design ${numQuestions} related single-choice questions based on this "Reading Material." Your output must be strictly in JSON format, containing a readingMaterial key and a questions key (whose value is an array of ${numQuestions} question objects). ${mustBeInLang}`;
                 schema = {
                     type: "OBJECT",
                     properties: {
@@ -332,7 +348,7 @@
                 break;
             case 'single':
             default:
-                systemPrompt = `您是一位專業的教師，您的任務是根據提供的「隨機採樣文本」（約 ${sampleCount} 個段落），生成 ${numQuestions} 個繁體中文的單項選擇題。**請確保您的所有問題都來自於這段提供的文本中。**每個問題必須有四個選項，其中只有一個是正確答案。請確保問題與文本內容高度相關。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} single-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are strictly derived from the provided text. Each question must have four options, with only one correct answer. Ensure the questions are highly relevant to the text content. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
                 schema = {
                     type: "ARRAY",
                     items: {
@@ -361,12 +377,16 @@
         }
     }
     
-    // ✨ 答案解釋功能
+    // ✨ 答案解釋功能 (同時使用檢測到的語言)
     async function explainAnswer(button, context, question, answer) {
          button.disabled = true;
          button.innerHTML = '<div class="loader small-loader"></div>';
          
-         const prompt = `基於以下原文：\n"""${context}"""\n\n請用繁體中文解釋，為什麼對於問題「${question}」，正確答案是「${Array.isArray(answer) ? answer.join(', ') : answer}」。同時簡要說明其他選項為何不正確。`;
+         const langPrompt = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
+            ? '請用繁體中文解釋' 
+            : `Please explain in ${detectedLanguage}`;
+
+         const prompt = `Based on the source text:\n"""${context}"""\n\n${langPrompt}, why the correct answer for the question "${question}" is "${Array.isArray(answer) ? answer.join(', ') : answer}". Also, briefly explain why the other options are incorrect.`;
          const payload = { contents: [{ parts: [{ text: prompt }] }] };
          const explanationTextElement = button.nextElementSibling;
          
@@ -384,7 +404,7 @@
          }
     }
 
-    // 顯示測驗題目
+    // 顯示測驗題目 (以下函式沒有變動)
     function displayQuiz(quizData, quizType) {
         quizContainer.innerHTML = ''; 
         if (!quizData) { showError("AI 未能生成有效的題目內容。"); return; }
@@ -478,24 +498,19 @@
         return element;
     }
 
-    // 檢查單選答案 (⭐ 修正顏色邏輯 ⭐)
+    // 檢查單選答案 
     function checkSingleAnswer(selectedButton, correctAnswer, context) {
         const optionsContainer = selectedButton.parentElement;
         const allButtons = optionsContainer.querySelectorAll('button');
         const correctText = correctAnswer.trim();
 
         allButtons.forEach(button => {
-            // 禁用所有按鈕
             button.disabled = true;
-            // 移除所有 hover 效果
             button.classList.remove('hover:bg-gray-500');
-            // 清除先前可能有的顏色
             button.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-600', 'font-bold');
-            // 預設重設為未選中狀態 (灰色)
             button.classList.add('bg-gray-600');
         });
         
-        // 標記正確答案 (綠色)
         allButtons.forEach(button => {
             if (button.textContent.trim() === correctText) {
                 button.classList.remove('bg-gray-600'); 
@@ -503,9 +518,7 @@
             }
         });
 
-        // 檢查並標記使用者選擇的答案
         if (selectedButton.textContent.trim() !== correctText) {
-            // 如果所選的不正確，則將其標記為紅色 (錯選)
             selectedButton.classList.remove('bg-gray-600');
             selectedButton.classList.remove('bg-green-600');
             selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
@@ -514,7 +527,7 @@
         showExplanationButton(optionsContainer);
     }
 
-    // 檢查多選答案 (⭐ 修正顏色邏輯 ⭐)
+    // 檢查多選答案
     function checkMultipleAnswer(confirmButton, correctAnswers, context) {
         const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
         const allLabels = optionsContainer.querySelectorAll('label');
@@ -532,27 +545,22 @@
             const isCorrect = trimmedCorrectAnswers.includes(optionText);
             const isChecked = checkbox.checked;
 
-            // 移除所有顏色標記和 hover 效果
             label.classList.remove('bg-gray-600', 'hover:bg-gray-500', 'bg-green-600', 'bg-yellow-600', 'bg-red-600', 'font-bold'); 
-            label.classList.add('bg-gray-600'); // 預設灰色
+            label.classList.add('bg-gray-600'); 
 
             if (isCorrect) {
                 if (isChecked) {
-                    // 答對 (正確且選中) - 綠色
                     label.classList.remove('bg-gray-600');
                     label.classList.add('bg-green-600', 'font-bold'); 
                 } else {
-                    // 漏選 (正確但未選) - 黃色
                     label.classList.remove('bg-gray-600');
                     label.classList.add('bg-yellow-600', 'font-bold'); 
                 }
             } else {
                 if (isChecked) {
-                    // 誤選 (錯誤但選中) - 紅色
                     label.classList.remove('bg-gray-600');
                     label.classList.add('bg-red-600', 'font-bold'); 
                 }
-                // 錯誤且未選中：保持預設灰色 (bg-gray-600)
             }
         });
 
