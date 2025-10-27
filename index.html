@@ -23,9 +23,9 @@
             display: inline-block;
         }
         .small-loader {
-             width: 12px;
-             height: 12px;
-             border-width: 3px;
+            width: 12px;
+            height: 12px;
+            border-width: 3px;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -227,9 +227,9 @@
             } else if (file.type === 'application/pdf') {
                 // 再次檢查 PDF.js 是否載入完成 (雙重保障)
                 if (typeof pdfjsLib === 'undefined' || !pdfjsLib.getDocument) {
-                     showError("PDF 處理函式庫尚未載入完成，請稍候重試或重新載入頁面。");
-                     resetFileInput();
-                     return;
+                    showError("PDF 處理函式庫尚未載入完成，請稍候重試或重新載入頁面。");
+                    resetFileInput();
+                    return;
                 }
                 await handlePdfFile(file);
             } else {
@@ -337,14 +337,14 @@
              const userApiKey = apiKeyInput.value.trim();
              
              if (!userApiKey) {
-                throw new Error("API 金鑰為空，請輸入您的 Gemini API Key。");
+                 throw new Error("API 金鑰為空，請輸入您的 Gemini API Key。");
              }
 
              if (userApiKey) {
-                 localStorage.setItem('geminiApiKey', userApiKey);
+                  localStorage.setItem('geminiApiKey', userApiKey);
              }
 
-             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${userApiKey}`;
+             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userApiKey}`;
 
              try {
                  const response = await fetch(apiUrl, {
@@ -358,10 +358,10 @@
                      console.error("API Error Response:", errorBody);
                      
                      if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
-                          throw new Error(`API 金鑰無效，請檢查後再試。`);
+                           throw new Error(`API 金鑰無效，請檢查後再試。`);
                      }
                      if (response.status === 403) {
-                          throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
+                           throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
                      }
                      throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
                  }
@@ -608,15 +608,15 @@
             let optionsHtml = '';
             if (type === 'single') {
                  optionsHtml = item.options.map(option => `
-                     <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
+                    <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
                  `).join('');
             } else { // multiple
-                optionsHtml = item.options.map((option, i) => `
-                    <label class="flex items-center p-3 bg-gray-600 rounded-md cursor-pointer hover:bg-gray-500 transition duration-200">
-                        <input type="checkbox" class="custom-checkbox h-5 w-5 rounded bg-gray-800 border-gray-500 text-indigo-600 focus:ring-indigo-500">
-                        <span class="ml-3 text-gray-200">${option}</span>
-                    </label>
-                `).join('');
+                 optionsHtml = item.options.map((option, i) => `
+                     <label class="flex items-center p-3 bg-gray-600 rounded-md cursor-pointer hover:bg-gray-500 transition duration-200">
+                         <input type="checkbox" class="custom-checkbox h-5 w-5 rounded bg-gray-800 border-gray-500 text-indigo-600 focus:ring-indigo-500">
+                         <span class="ml-3 text-gray-200">${option}</span>
+                     </label>
+                 `).join('');
             }
 
             element.innerHTML = `
@@ -647,39 +647,48 @@
             return element;
         }
 
-        // 檢查單選答案 
+        // ===================================
+        // == 程式碼修正區域 (開始) ==
+        // ===================================
+
+        // 檢查單選答案 (修正版)
         function checkSingleAnswer(selectedButton, correctAnswer, context) {
             const optionsContainer = selectedButton.parentElement;
             const allButtons = optionsContainer.querySelectorAll('button');
             const correctText = correctAnswer.trim();
+            const selectedText = selectedButton.textContent.trim();
 
             allButtons.forEach(button => {
                 button.disabled = true;
-                button.classList.remove('hover:bg-gray-500');
-                button.classList.remove('bg-green-600', 'bg-red-600', 'bg-yellow-600', 'bg-gray-600', 'font-bold');
-                button.classList.add('bg-gray-600');
-            });
-            
-            // 標記正確答案 (綠色)
-            allButtons.forEach(button => {
-                if (button.textContent.trim() === correctText) {
-                    button.classList.remove('bg-gray-600'); 
+                const buttonText = button.textContent.trim();
+                
+                // 1. 先移除所有相關的樣式
+                button.classList.remove(
+                    'hover:bg-gray-500', 
+                    'bg-gray-600', 
+                    'bg-green-600', 
+                    'bg-red-600', 
+                    'text-white', 
+                    'font-bold'
+                );
+
+                // 2. 根據邏輯「只添加」需要的樣式
+                if (buttonText === correctText) {
+                    // 正確答案 (綠色)
                     button.classList.add('bg-green-600', 'text-white', 'font-bold');
+                } else if (buttonText === selectedText) {
+                    // 錯誤的選擇 (紅色)
+                    button.classList.add('bg-red-600', 'text-white', 'font-bold');
+                } else {
+                    // 其他未選的錯誤選項 (灰色)
+                    button.classList.add('bg-gray-600'); 
                 }
             });
-
-            // 檢查並標記使用者選擇的答案
-            if (selectedButton.textContent.trim() !== correctText) {
-                // 如果所選的不正確，則將其標記為紅色 (錯選)
-                selectedButton.classList.remove('bg-gray-600');
-                selectedButton.classList.remove('bg-green-600');
-                selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
-            }
             
             showExplanationButton(optionsContainer);
         }
 
-        // 檢查多選答案
+        // 檢查多選答案 (修正版)
         function checkMultipleAnswer(confirmButton, correctAnswers, context) {
             const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
             const allLabels = optionsContainer.querySelectorAll('label');
@@ -697,31 +706,42 @@
                 const isCorrect = trimmedCorrectAnswers.includes(optionText);
                 const isChecked = checkbox.checked;
 
-                label.classList.remove('bg-gray-600', 'hover:bg-gray-500', 'bg-green-600', 'bg-yellow-600', 'bg-red-600', 'font-bold'); 
-                label.classList.add('bg-gray-600'); // 預設灰色
+                // 1. 先移除所有相關的樣式
+                label.classList.remove(
+                    'hover:bg-gray-500', 
+                    'bg-gray-600', 
+                    'bg-green-600', 
+                    'bg-red-600', 
+                    'bg-yellow-600', 
+                    'font-bold'
+                );
 
+                // 2. 根據邏輯「只添加」需要的樣式
                 if (isCorrect) {
                     if (isChecked) {
                         // 答對 (正確且選中) - 綠色
-                        label.classList.remove('bg-gray-600');
-                        label.classList.add('bg-green-600', 'font-bold'); 
+                        label.classList.add('bg-green-600', 'font-bold');
                     } else {
                         // 漏選 (正確但未選) - 黃色
-                        label.classList.remove('bg-gray-600');
-                        label.classList.add('bg-yellow-600', 'font-bold'); 
+                        label.classList.add('bg-yellow-600', 'font-bold');
                     }
                 } else {
                     if (isChecked) {
                         // 誤選 (錯誤但選中) - 紅色
-                        label.classList.remove('bg-gray-600');
-                        label.classList.add('bg-red-600', 'font-bold'); 
+                        label.classList.add('bg-red-600', 'font-bold');
+                    } else {
+                        // 錯誤且未選中：保持預設灰色
+                        label.classList.add('bg-gray-600');
                     }
-                    // 錯誤且未選中：保持預設灰色 (bg-gray-600)
                 }
             });
 
             showExplanationButton(optionsContainer);
         }
+
+        // ===================================
+        // == 程式碼修正區域 (結束) ==
+        // ===================================
         
         function showExplanationButton(container) {
              const questionElement = container.closest('.p-6');
