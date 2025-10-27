@@ -46,29 +46,26 @@
 </head>
 <body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-2xl mx-auto bg-gray-800 rounded-2xl shadow-2xl p-4 sm:p-6 md:p-8 space-y-8">
-        <!-- 標題區 -->
         <div class="text-center">
             <h1 class="text-3xl md:text-4xl font-bold text-white">AI 測驗題目生成器</h1>
             <p class="mt-2 text-gray-400">上傳 .txt 或 .pdf 檔，設定題型與題數，自動生成測驗。</p>
         </div>
 
-        <!-- 上傳與設定區 -->
         <div class="space-y-6">
             <div>
                 <h2 class="text-xl font-semibold text-white mb-3">1. 上傳學習材料</h2>
                 <div id="upload-area" class="relative custom-file-upload rounded-lg p-8 text-center cursor-pointer">
                     <input type="file" id="file-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".txt,.pdf">
                     <div class="flex flex-col items-center justify-center space-y-2">
-                         <svg class="w-12 h-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V8.25c0-1.12.93-2.03 2.08-1.93l11.43.93c1.15.1 2.01.98 2.01 2.18v6.44c0 1.2-.86 2.1-2.01 2.18l-11.43.93C3.93 19.28 3 18.37 3 17.25z" />
-                        </svg>
-                        <p id="upload-text" class="text-gray-400">點擊或拖曳 .txt / .pdf 檔到此處</p>
-                        <p id="file-name" class="text-indigo-400 font-medium"></p>
+                           <svg class="w-12 h-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V8.25c0-1.12.93-2.03 2.08-1.93l11.43.93c1.15.1 2.01.98 2.01 2.18v6.44c0 1.2-.86 2.1-2.01 2.18l-11.43.93C3.93 19.28 3 18.37 3 17.25z" />
+                            </svg>
+                            <p id="upload-text" class="text-gray-400">點擊或拖曳 .txt / .pdf 檔到此處</p>
+                            <p id="file-name" class="text-indigo-400 font-medium"></p>
                     </div>
                 </div>
             </div>
             
-            <!-- 功能按鈕區 -->
             <div class="space-y-4">
                 <h2 class="text-xl font-semibold text-white">2. 設定測驗</h2>
                 <div>
@@ -86,47 +83,43 @@
                         </button>
                     </div>
                 </div>
-                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label for="quiz-type" class="block mb-2 text-sm font-medium text-gray-300">題目類型：</label>
-                        <select id="quiz-type" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
-                            <option value="single" selected>單選題</option>
-                            <option value="multiple">多選題</option>
-                            <option value="group">題組</option>
-                        </select>
+                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                       <div>
+                           <label for="quiz-type" class="block mb-2 text-sm font-medium text-gray-300">題目類型：</label>
+                           <select id="quiz-type" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                               <option value="single" selected>單選題</option>
+                               <option value="multiple">多選題</option>
+                               <option value="group">題組</option>
+                           </select>
+                       </div>
+                        <div>
+                           <label for="num-questions" class="block mb-2 text-sm font-medium text-gray-300">題數：</label>
+                           <select id="num-questions" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                               <option value="3">3 題</option>
+                               <option value="5" selected>5 題</option>
+                               <option value="10">10 題</option>
+                           </select>
+                       </div>
+                   </div>
+                   <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                       <button id="summarize-btn" class="w-full sm:w-1/2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                            ✨ 總結文章重點
+                        </button>
+                        <button id="generate-btn" class="w-full sm:w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                            生成測驗題目
+                        </button>
                     </div>
-                     <div>
-                        <label for="num-questions" class="block mb-2 text-sm font-medium text-gray-300">題數：</label>
-                        <select id="num-questions" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
-                            <option value="3">3 題</option>
-                            <option value="5" selected>5 題</option>
-                            <option value="10">10 題</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                     <button id="summarize-btn" class="w-full sm:w-1/2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
-                        ✨ 總結文章重點
-                    </button>
-                    <button id="generate-btn" class="w-full sm:w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
-                        生成測驗題目
-                    </button>
-                </div>
             </div>
         </div>
 
-        <!-- 摘要結果區 -->
         <div id="summary-container" class="hidden mt-6 space-y-3">
             <h3 class="text-xl font-semibold text-white">文章重點摘要 ✨</h3>
             <div id="summary-content" class="bg-gray-700/50 p-4 rounded-lg text-gray-300 whitespace-pre-wrap"></div>
         </div>
         
-        <!-- 測驗題目區 -->
         <div id="quiz-container" class="mt-10 space-y-6">
-            <!-- 題目將會動態插入此處 -->
-        </div>
+            </div>
 
-        <!-- 載入中動畫與錯誤訊息 -->
         <div id="loading-indicator" class="text-center py-6 hidden">
             <div class="loader inline-block"></div>
             <p class="mt-4 text-gray-400">AI 正在努力為您生成內容，請稍候...</p>
@@ -308,45 +301,45 @@
              const userApiKey = apiKeyInput.value.trim();
              
              if (userApiKey) {
-                localStorage.setItem('geminiApiKey', userApiKey);
+                 localStorage.setItem('geminiApiKey', userApiKey);
              }
 
              const apiKey = userApiKey || ""; // 優先使用使用者金鑰
              const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
              try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+                 const response = await fetch(apiUrl, {
+                     method: 'POST',
+                     headers: { 'Content-Type': 'application/json' },
+                     body: JSON.stringify(payload)
+                 });
 
-                if (!response.ok) {
-                    const errorBody = await response.json();
-                    console.error("API Error Response:", errorBody);
-                    if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
-                         throw new Error(`API 金鑰無效，請檢查後再試。`);
-                    }
-                    throw new Error(`API 請求失敗，狀態碼： ${response.status}`);
-                }
-                
-                const result = await response.json();
-                const candidate = result.candidates?.[0];
-                if (candidate?.content?.parts?.[0]?.text) {
-                    return candidate.content.parts[0].text;
-                } else {
-                    console.error("無效的回應結構:", result);
-                    throw new Error("AI 未能生成有效的內容。");
-                }
-            } catch (error) {
-                if (retries > 0 && !error.message.includes('API 金鑰無效')) {
-                    console.log(`正在重試... 剩餘次數: ${retries - 1}`);
-                    await new Promise(res => setTimeout(res, delay));
-                    return callGemini(payload, retries - 1, delay * 2);
-                } else {
-                    throw error;
-                }
-            }
+                 if (!response.ok) {
+                     const errorBody = await response.json();
+                     console.error("API Error Response:", errorBody);
+                     if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
+                          throw new Error(`API 金鑰無效，請檢查後再試。`);
+                     }
+                     throw new Error(`API 請求失敗，狀態碼： ${response.status}`);
+                 }
+                 
+                 const result = await response.json();
+                 const candidate = result.candidates?.[0];
+                 if (candidate?.content?.parts?.[0]?.text) {
+                     return candidate.content.parts[0].text;
+                 } else {
+                     console.error("無效的回應結構:", result);
+                     throw new Error("AI 未能生成有效的內容。");
+                 }
+             } catch (error) {
+                 if (retries > 0 && !error.message.includes('API 金鑰無效')) {
+                     console.log(`正在重試... 剩餘次數: ${retries - 1}`);
+                     await new Promise(res => setTimeout(res, delay));
+                     return callGemini(payload, retries - 1, delay * 2);
+                 } else {
+                     throw error;
+                 }
+             }
         }
 
         // ✨ 總結文章功能
@@ -477,7 +470,9 @@
             if (quizType === 'group') {
                 displayQuestionGroup(quizData);
             } else {
-                quizData.forEach((item, index) => {
+                // 確保 quizData 是陣列
+                const questions = Array.isArray(quizData) ? quizData : [];
+                questions.forEach((item, index) => {
                     if (quizType === 'single') displaySingleChoiceQuestion(item, index);
                     else if (quizType === 'multiple') displayMultipleChoiceQuestion(item, index);
                 });
@@ -486,8 +481,8 @@
 
         function displayQuestionGroup(data) {
              if (!data.readingMaterial || !Array.isArray(data.questions)) {
-                showError("題組格式不符。"); return;
-            }
+                 showError("題組格式不符。"); return;
+             }
             const groupContainer = document.createElement('div');
             groupContainer.className = 'border border-teal-500 rounded-lg p-6 space-y-6';
             groupContainer.innerHTML = `
@@ -518,8 +513,8 @@
             let optionsHtml = '';
             if (type === 'single') {
                  optionsHtml = item.options.map(option => `
-                    <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
-                `).join('');
+                     <button class="w-full text-left p-3 bg-gray-600 hover:bg-gray-500 rounded-md transition duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500">${option}</button>
+                 `).join('');
             } else { // multiple
                 optionsHtml = item.options.map((option, i) => `
                     <label class="flex items-center p-3 bg-gray-600 rounded-md cursor-pointer hover:bg-gray-500 transition duration-200">
@@ -557,7 +552,7 @@
             return element;
         }
 
-        // 檢查答案
+        // 檢查單選答案 (已修正)
         function checkSingleAnswer(selectedButton, correctAnswer, context) {
             const optionsContainer = selectedButton.parentElement;
             const allButtons = optionsContainer.querySelectorAll('button');
@@ -571,14 +566,18 @@
 
             // 檢查所選按鈕是否為正確答案
             if (selectedButton.textContent.trim() === correctText) {
-                // 如果正確，僅將其變為綠色
+                // 如果正確，將其變為綠色
+                selectedButton.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
                 selectedButton.classList.add('bg-green-600', 'text-white', 'font-bold');
             } else {
                 // 如果不正確，將所選的變為紅色
+                selectedButton.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
                 selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
-                // 然後，找到並將正確答案變為綠色
+                
+                // 找到並將正確答案變為綠色
                 allButtons.forEach(button => {
                     if (button.textContent.trim() === correctText) {
+                        button.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
                         button.classList.add('bg-green-600', 'text-white', 'font-bold');
                     }
                 });
@@ -587,6 +586,7 @@
             showExplanationButton(optionsContainer);
         }
 
+        // 檢查多選答案 (已修正)
         function checkMultipleAnswer(confirmButton, correctAnswers, context) {
             const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
             const allLabels = optionsContainer.querySelectorAll('label');
@@ -604,12 +604,15 @@
                 const isCorrect = trimmedCorrectAnswers.includes(optionText);
                 const isChecked = checkbox.checked;
 
+                // **修正點：移除基礎背景色和滑鼠懸停色**
+                label.classList.remove('bg-gray-600', 'hover:bg-gray-500'); 
+
                 if (isCorrect && isChecked) {
                     label.classList.add('bg-green-600', 'font-bold'); // 答對
                 } else if (isCorrect && !isChecked) {
-                    label.classList.add('bg-yellow-600', 'font-bold'); // 漏選
+                    label.classList.add('bg-yellow-600', 'font-bold'); // 漏選 (正確答案但未選)
                 } else if (!isCorrect && isChecked) {
-                    label.classList.add('bg-red-600', 'font-bold'); // 答錯
+                    label.classList.add('bg-red-600', 'font-bold'); // 答錯 (錯誤答案但選了)
                 }
             });
 
@@ -633,4 +636,3 @@
     </script>
 </body>
 </html>
-
