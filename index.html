@@ -363,7 +363,7 @@
             }
         }
 
-        // 生成測驗功能
+        // 生成測驗功能 (已修正 System Prompt)
         async function generateQuizWithRetry(text) {
             loadingIndicator.classList.remove('hidden');
             quizContainer.innerHTML = '';
@@ -375,7 +375,7 @@
 
             switch (quizType) {
                 case 'multiple':
-                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的多選題。每個問題必須有四個選項，其中可能有多個正確答案。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的多選題。**請隨機從文本的各個部分選擇具代表性的內容出題。**每個問題必須有四個選項，其中可能有多個正確答案。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
                     schema = {
                         type: "ARRAY",
                         items: {
@@ -386,7 +386,7 @@
                     };
                     break;
                 case 'group':
-                    systemPrompt = `您是一位專業的教師。請先從提供的文本中，擷取一段最適合出題的核心段落作為「閱讀材料」。然後，根據這段「閱讀材料」，設計 ${numQuestions} 道相關的繁體中文單選題。您的輸出必須是嚴格的JSON格式，包含一個 readingMaterial 鍵和一個 questions 鍵（其值為包含 ${numQuestions} 個問題物件的陣列）。`;
+                    systemPrompt = `您是一位專業的教師。請先從提供的文本中，擷取一段最適合出題的核心段落作為「閱讀材料」。**請隨機選擇文本中的一個核心主題段落。**然後，根據這段「閱讀材料」，設計 ${numQuestions} 道相關的繁體中文單選題。您的輸出必須是嚴格的JSON格式，包含一個 readingMaterial 鍵和一個 questions 鍵（其值為包含 ${numQuestions} 個問題物件的陣列）。`;
                     schema = {
                         type: "OBJECT",
                         properties: {
@@ -405,7 +405,7 @@
                     break;
                 case 'single':
                 default:
-                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的單項選擇題。每個問題必須有四個選項，其中只有一個是正確答案。請確保問題與文本內容高度相關。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的單項選擇題。**請隨機從文本的各個部分選擇具代表性的內容出題。**每個問題必須有四個選項，其中只有一個是正確答案。請確保問題與文本內容高度相關。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
                     schema = {
                         type: "ARRAY",
                         items: {
@@ -552,7 +552,7 @@
             return element;
         }
 
-        // 檢查單選答案 (已修正)
+        // 檢查單選答案 
         function checkSingleAnswer(selectedButton, correctAnswer, context) {
             const optionsContainer = selectedButton.parentElement;
             const allButtons = optionsContainer.querySelectorAll('button');
@@ -567,17 +567,17 @@
             // 檢查所選按鈕是否為正確答案
             if (selectedButton.textContent.trim() === correctText) {
                 // 如果正確，將其變為綠色
-                selectedButton.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
+                selectedButton.classList.remove('bg-gray-600'); 
                 selectedButton.classList.add('bg-green-600', 'text-white', 'font-bold');
             } else {
                 // 如果不正確，將所選的變為紅色
-                selectedButton.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
+                selectedButton.classList.remove('bg-gray-600'); 
                 selectedButton.classList.add('bg-red-600', 'text-white', 'font-bold');
                 
                 // 找到並將正確答案變為綠色
                 allButtons.forEach(button => {
                     if (button.textContent.trim() === correctText) {
-                        button.classList.remove('bg-gray-600'); // **修正點：移除基礎背景色**
+                        button.classList.remove('bg-gray-600'); 
                         button.classList.add('bg-green-600', 'text-white', 'font-bold');
                     }
                 });
@@ -586,7 +586,7 @@
             showExplanationButton(optionsContainer);
         }
 
-        // 檢查多選答案 (已修正)
+        // 檢查多選答案 
         function checkMultipleAnswer(confirmButton, correctAnswers, context) {
             const optionsContainer = confirmButton.closest('.p-6').querySelector('.options-container');
             const allLabels = optionsContainer.querySelectorAll('label');
@@ -604,7 +604,7 @@
                 const isCorrect = trimmedCorrectAnswers.includes(optionText);
                 const isChecked = checkbox.checked;
 
-                // **修正點：移除基礎背景色和滑鼠懸停色**
+                // 移除基礎背景色和滑鼠懸停色
                 label.classList.remove('bg-gray-600', 'hover:bg-gray-500'); 
 
                 if (isCorrect && isChecked) {
