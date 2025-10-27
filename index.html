@@ -27,7 +27,7 @@
             height: 40px;
             animation: spin 1s linear infinite;
         }
-         .small-loader {
+        .small-loader {
             width: 20px;
             height: 20px;
             border-width: 2px;
@@ -57,7 +57,7 @@
                 <div id="upload-area" class="relative custom-file-upload rounded-lg p-8 text-center cursor-pointer">
                     <input type="file" id="file-upload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".txt,.pdf">
                     <div class="flex flex-col items-center justify-center space-y-2">
-                           <svg class="w-12 h-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <svg class="w-12 h-12 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V9.75m0 0l-3.75 3.75M12 9.75l3.75 3.75M3 17.25V8.25c0-1.12.93-2.03 2.08-1.93l11.43.93c1.15.1 2.01.98 2.01 2.18v6.44c0 1.2-.86 2.1-2.01 2.18l-11.43.93C3.93 19.28 3 18.37 3 17.25z" />
                             </svg>
                             <p id="upload-text" class="text-gray-400">點擊或拖曳 .txt / .pdf 檔到此處</p>
@@ -83,26 +83,26 @@
                         </button>
                     </div>
                 </div>
-                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                       <div>
-                           <label for="quiz-type" class="block mb-2 text-sm font-medium text-gray-300">題目類型：</label>
-                           <select id="quiz-type" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
-                               <option value="single" selected>單選題</option>
-                               <option value="multiple">多選題</option>
-                               <option value="group">題組</option>
-                           </select>
-                       </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                           <label for="num-questions" class="block mb-2 text-sm font-medium text-gray-300">題數：</label>
-                           <select id="num-questions" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
-                               <option value="3">3 題</option>
-                               <option value="5" selected>5 題</option>
-                               <option value="10">10 題</option>
-                           </select>
-                       </div>
-                   </div>
-                   <div class="flex flex-col sm:flex-row gap-3 pt-2">
-                       <button id="summarize-btn" class="w-full sm:w-1/2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
+                            <label for="quiz-type" class="block mb-2 text-sm font-medium text-gray-300">題目類型：</label>
+                            <select id="quiz-type" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                                <option value="single" selected>單選題</option>
+                                <option value="multiple">多選題</option>
+                                <option value="group">題組</option>
+                            </select>
+                        </div>
+                         <div>
+                            <label for="num-questions" class="block mb-2 text-sm font-medium text-gray-300">題數：</label>
+                            <select id="num-questions" class="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full p-2.5">
+                                <option value="3">3 題</option>
+                                <option value="5" selected>5 題</option>
+                                <option value="10">10 題</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3 pt-2">
+                        <button id="summarize-btn" class="w-full sm:w-1/2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
                             ✨ 總結文章重點
                         </button>
                         <button id="generate-btn" class="w-full sm:w-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg transition duration-300 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center gap-2" disabled>
@@ -362,8 +362,33 @@
                 loadingIndicator.classList.add('hidden');
             }
         }
+        
+        // ------------------------------------------------------------------
+        // ⭐ NEW FUNCTION: 隨機打亂文本內容 (解決出題偏差) ⭐
+        // ------------------------------------------------------------------
+        function shuffleTextContent(text) {
+            // 假設題目之間是以「一個或多個換行符」分隔。
+            // 使用正則表達式 \n+ 來分割，確保題目能被獨立視為一個段落。
+            const paragraphs = text.split(/\n+/).filter(p => p.trim() !== '');
 
-        // 生成測驗功能 (已修正 System Prompt)
+            if (paragraphs.length <= 1) {
+                // 如果只有一個段落，則不做打亂
+                console.warn("文本段落過少，無法有效打亂，將傳送原始文本。");
+                return text;
+            }
+
+            // Fisher-Yates 亂數排序法
+            for (let i = paragraphs.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [paragraphs[i], paragraphs[j]] = [paragraphs[j], paragraphs[i]];
+            }
+
+            // 重新組合，用雙換行分隔，以保持題目之間的區隔清晰
+            return paragraphs.join('\n\n');
+        }
+
+
+        // 生成測驗功能 (已修正 System Prompt，並加入亂序處理)
         async function generateQuizWithRetry(text) {
             loadingIndicator.classList.remove('hidden');
             quizContainer.innerHTML = '';
@@ -372,10 +397,13 @@
             const quizType = quizTypeSelect.value;
             const numQuestions = numQuestionsSelect.value;
             let systemPrompt, schema;
+            
+            // ⭐ 核心變更：先將輸入文本內容打亂順序 ⭐
+            const shuffledContent = shuffleTextContent(text);
 
             switch (quizType) {
                 case 'multiple':
-                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的多選題。**請隨機從文本的各個部分選擇具代表性的內容出題。**每個問題必須有四個選項，其中可能有多個正確答案。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的多選題。**由於提供的文本內容已經過隨機排序，請從開頭部分選取內容出題即可。**每個問題必須有四個選項，其中可能有多個正確答案。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
                     schema = {
                         type: "ARRAY",
                         items: {
@@ -386,7 +414,7 @@
                     };
                     break;
                 case 'group':
-                    systemPrompt = `您是一位專業的教師。請先從提供的文本中，擷取一段最適合出題的核心段落作為「閱讀材料」。**請隨機選擇文本中的一個核心主題段落。**然後，根據這段「閱讀材料」，設計 ${numQuestions} 道相關的繁體中文單選題。您的輸出必須是嚴格的JSON格式，包含一個 readingMaterial 鍵和一個 questions 鍵（其值為包含 ${numQuestions} 個問題物件的陣列）。`;
+                    systemPrompt = `您是一位專業的教師。請先從提供的文本中，擷取一段最適合出題的核心段落作為「閱讀材料」。**由於提供的文本內容已經過隨機排序，請從開頭部分選取最前面幾段文字。**然後，根據這段「閱讀材料」，設計 ${numQuestions} 道相關的繁體中文單選題。您的輸出必須是嚴格的JSON格式，包含一個 readingMaterial 鍵和一個 questions 鍵（其值為包含 ${numQuestions} 個問題物件的陣列）。`;
                     schema = {
                         type: "OBJECT",
                         properties: {
@@ -405,7 +433,7 @@
                     break;
                 case 'single':
                 default:
-                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的單項選擇題。**請隨機從文本的各個部分選擇具代表性的內容出題。**每個問題必須有四個選項，其中只有一個是正確答案。請確保問題與文本內容高度相關。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
+                    systemPrompt = `您是一位專業的教師，您的任務是根據提供的文本，生成 ${numQuestions} 個繁體中文的單項選擇題。**由於提供的文本內容已經過隨機排序，請從開頭部分選取內容出題即可。**每個問題必須有四個選項，其中只有一個是正確答案。請確保問題與文本內容高度相關。您的輸出必須是嚴格的JSON格式，一個包含 ${numQuestions} 個問題物件的陣列。`;
                     schema = {
                         type: "ARRAY",
                         items: {
@@ -418,7 +446,8 @@
             }
 
             const payload = {
-                contents: [{ parts: [{ text: text }] }],
+                // ⭐ 使用打亂後的內容傳給 API ⭐
+                contents: [{ parts: [{ text: shuffledContent }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
                 generationConfig: { responseMimeType: "application/json", responseSchema: schema }
             };
@@ -426,7 +455,8 @@
             try {
                 const jsonText = await callGemini(payload);
                 const quizData = JSON.parse(jsonText);
-                displayQuiz(quizData, quizType);
+                // 注意：這裡傳入 displayQuiz 的仍然是原始的 fileContent，用於答案解釋
+                displayQuiz(quizData, quizType); 
             } catch (error) {
                 showError(error.message || "生成測驗時發生未知錯誤。");
             } finally {
@@ -436,25 +466,25 @@
         
         // ✨ 答案解釋功能
         async function explainAnswer(button, context, question, answer) {
-            button.disabled = true;
-            button.innerHTML = '<div class="loader small-loader"></div>';
-            
-            const prompt = `基於以下原文：\n"""${context}"""\n\n請用繁體中文解釋，為什麼對於問題「${question}」，正確答案是「${Array.isArray(answer) ? answer.join(', ') : answer}」。同時簡要說明其他選項為何不正確。`;
-            const payload = { contents: [{ parts: [{ text: prompt }] }] };
-            const explanationTextElement = button.nextElementSibling;
-            
-            try {
-                const explanation = await callGemini(payload);
-                explanationTextElement.textContent = explanation;
-                explanationTextElement.classList.remove('hidden');
-                button.classList.add('hidden');
-            } catch (error) {
-                explanationTextElement.textContent = `無法生成解釋：${error.message}`;
-                explanationTextElement.classList.remove('hidden');
-                explanationTextElement.classList.add('text-red-400');
-                button.innerHTML = '✨ 為什麼？';
-                button.disabled = false;
-            }
+             button.disabled = true;
+             button.innerHTML = '<div class="loader small-loader"></div>';
+             
+             const prompt = `基於以下原文：\n"""${context}"""\n\n請用繁體中文解釋，為什麼對於問題「${question}」，正確答案是「${Array.isArray(answer) ? answer.join(', ') : answer}」。同時簡要說明其他選項為何不正確。`;
+             const payload = { contents: [{ parts: [{ text: prompt }] }] };
+             const explanationTextElement = button.nextElementSibling;
+             
+             try {
+                 const explanation = await callGemini(payload);
+                 explanationTextElement.textContent = explanation;
+                 explanationTextElement.classList.remove('hidden');
+                 button.classList.add('hidden');
+             } catch (error) {
+                 explanationTextElement.textContent = `無法生成解釋：${error.message}`;
+                 explanationTextElement.classList.remove('hidden');
+                 explanationTextElement.classList.add('text-red-400');
+                 button.innerHTML = '✨ 為什麼？';
+                 button.disabled = false;
+             }
         }
 
         // 顯示測驗題目
@@ -490,7 +520,7 @@
                 <p class="bg-gray-700/50 p-4 rounded-md text-gray-300 whitespace-pre-wrap">${data.readingMaterial}</p>
             `;
             data.questions.forEach((q, index) => {
-                const questionElement = createQuestionElement(q, index, 'single', data.readingMaterial);
+                const questionElement = createQuestionElement(q, index, 'single', fileContent);
                 groupContainer.appendChild(questionElement);
             });
             quizContainer.appendChild(groupContainer);
