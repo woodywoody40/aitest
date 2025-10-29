@@ -154,8 +154,6 @@
         // 預設為繁體中文，避免檢測失敗時亂碼
         let detectedLanguage = 'Traditional Chinese'; 
 
-        // 引入 PDF.js 庫 的程式碼已移除，改為在 <head> 中直接引用
-
         // 從 localStorage 載入 API 金鑰
         function loadApiKeyFromStorage() {
             const savedKey = localStorage.getItem('geminiApiKey');
@@ -206,14 +204,13 @@
 
         uploadArea.addEventListener('drop', (e) => handleFiles(e.dataTransfer.files), false);
         
-        // ✨✨✨ 修正 2: 點擊上傳區域時，明確觸發檔案輸入框 ✨✨✨
+        // 點擊上傳區域時，明確觸發檔案輸入框
         uploadArea.addEventListener('click', () => {
              fileUpload.click();
         });
         
         // 檔案輸入框的 change 事件來處理檔案內容
         fileUpload.addEventListener('change', (e) => handleFiles(e.target.files));
-        // ✨✨✨ 修正 2 結束 ✨✨✨
         
         // 處理檔案上傳
         async function handleFiles(files) {
@@ -294,8 +291,15 @@
                 detectedLanguage = language.trim().charAt(0).toUpperCase() + language.trim().slice(1);
                 console.log(`Detected Language: ${detectedLanguage}`);
             } catch (error) {
-                console.warn(`Language detection failed, defaulting to 'Traditional Chinese'. Error: ${error.message}`);
-                detectedLanguage = 'Traditional Chinese';
+                // ===================================
+                // == 程式碼修正區域 ==
+                // ===================================
+                // 如果偵測失敗（例如 API 金鑰錯誤），預設為 'English'
+                console.warn(`Language detection failed, defaulting to 'English'. Error: ${error.message}`);
+                detectedLanguage = 'English';
+                // ===================================
+                // == 程式碼修正區域 (結束) ==
+                // ===================================
             }
         }
 
@@ -337,51 +341,51 @@
              const userApiKey = apiKeyInput.value.trim();
              
              if (!userApiKey) {
-                 throw new Error("API 金鑰為空，請輸入您的 Gemini API Key。");
+                  throw new Error("API 金鑰為空，請輸入您的 Gemini API Key。");
              }
 
              if (userApiKey) {
-                  localStorage.setItem('geminiApiKey', userApiKey);
+                   localStorage.setItem('geminiApiKey', userApiKey);
              }
 
              const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${userApiKey}`;
 
              try {
-                 const response = await fetch(apiUrl, {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json' },
-                     body: JSON.stringify(payload)
-                 });
+                  const response = await fetch(apiUrl, {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify(payload)
+                  });
 
-                 if (!response.ok) {
-                     const errorBody = await response.json();
-                     console.error("API Error Response:", errorBody);
-                     
-                     if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
-                           throw new Error(`API 金鑰無效，請檢查後再試。`);
-                     }
-                     if (response.status === 403) {
-                           throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
-                     }
-                     throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
-                 }
-                 
-                 const result = await response.json();
-                 const candidate = result.candidates?.[0];
-                 if (candidate?.content?.parts?.[0]?.text) {
-                     return candidate.content.parts[0].text;
-                 } else {
-                     console.error("無效的回應結構:", result);
-                     throw new Error("AI 未能生成有效的內容。");
-                 }
+                  if (!response.ok) {
+                       const errorBody = await response.json();
+                       console.error("API Error Response:", errorBody);
+                       
+                       if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
+                            throw new Error(`API 金鑰無效，請檢查後再試。`);
+                       }
+                       if (response.status === 403) {
+                            throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
+                       }
+                       throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
+                  }
+                  
+                  const result = await response.json();
+                  const candidate = result.candidates?.[0];
+                  if (candidate?.content?.parts?.[0]?.text) {
+                       return candidate.content.parts[0].text;
+                  } else {
+                       console.error("無效的回應結構:", result);
+                       throw new Error("AI 未能生成有效的內容。");
+                  }
              } catch (error) {
-                 if (retries > 0 && !error.message.includes('API 金鑰無效') && !error.message.includes('403 Forbidden')) {
-                     console.log(`正在重試... 剩餘次數: ${retries - 1}`);
-                     await new Promise(res => setTimeout(res, delay));
-                     return callGemini(payload, retries - 1, delay * 2);
-                 } else {
-                     throw error;
-                 }
+                  if (retries > 0 && !error.message.includes('API 金鑰無效') && !error.message.includes('403 Forbidden')) {
+                       console.log(`正在重試... 剩餘次數: ${retries - 1}`);
+                       await new Promise(res => setTimeout(res, delay));
+                       return callGemini(payload, retries - 1, delay * 2);
+                  } else {
+                       throw error;
+                  }
              }
         }
 
@@ -540,16 +544,16 @@
              const explanationTextElement = button.nextElementSibling;
              
              try {
-                 const explanation = await callGemini(payload);
-                 explanationTextElement.textContent = explanation;
-                 explanationTextElement.classList.remove('hidden');
-                 button.classList.add('hidden');
+                  const explanation = await callGemini(payload);
+                  explanationTextElement.textContent = explanation;
+                  explanationTextElement.classList.remove('hidden');
+                  button.classList.add('hidden');
              } catch (error) {
-                 explanationTextElement.textContent = `無法生成解釋：${error.message}`;
-                 explanationTextElement.classList.remove('hidden');
-                 explanationTextElement.classList.add('text-red-400');
-                 button.innerHTML = '✨ 為什麼？';
-                 button.disabled = false;
+                  explanationTextElement.textContent = `無法生成解釋：${error.message}`;
+                  explanationTextElement.classList.remove('hidden');
+                  explanationTextElement.classList.add('text-red-400');
+                  button.innerHTML = '✨ 為什麼？';
+                  button.disabled = false;
              }
         }
 
@@ -576,7 +580,7 @@
 
         function displayQuestionGroup(data) {
              if (!data.readingMaterial || !Array.isArray(data.questions)) {
-                 showError("題組格式不符。"); return;
+                  showError("題組格式不符。"); return;
              }
             const groupContainer = document.createElement('div');
             groupContainer.className = 'border border-teal-500 rounded-lg p-6 space-y-6';
