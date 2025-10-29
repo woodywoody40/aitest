@@ -331,7 +331,7 @@
         });
 
         // ===================================
-        // == 程式碼修正區域 (callGemini) ==
+        // == 程式碼修正区域 (callGemini) ==
         // ===================================
 
         // 通用 Gemini API 呼叫函式
@@ -346,9 +346,9 @@
                    localStorage.setItem('geminiApiKey', userApiKey);
              }
 
-             // ✨✨✨ 修正點：堅持 v1beta，但改用 gemini-pro 模型 ✨✨✨
-             // 'gemini-pro' 是 v1beta 端點上的標準模型，保證支援 systemInstruction 和 JSON 模式
-             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${userApiKey}`;
+             // ✨✨✨ 修正點：退回 v1 穩定端點 和 gemini-1.5-flash ✨✨✨
+             // 這是最穩定的組合，我們將在 generateQuizWithRetry 中手動處理 JSON。
+             const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${userApiKey}`;
 
              try {
                   const response = await fetch(apiUrl, {
@@ -366,13 +366,13 @@
                        }
                        // 處理 400 Beta 功能錯誤
                        if (response.status === 400 && errorBody.error?.message.includes('Unknown name')) {
-                           throw new Error(`API 請求失敗 (400 Bad Request)。您可能正試圖在 'v1' 端點使用 'v1beta' 的功能 (如 systemInstruction)。請檢查 API URL。`);
+                           throw new Error(`API 請求失敗 (400 Bad Request)。您可能正試圖在 'v1' 端點使用 'v1beta' 的功能 (如 systemInstruction)。`);
                        }
                        if (response.status === 403) {
-                            throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
+                            throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制。`);
                        }
                        if (response.status === 404) {
-                           throw new Error(`API 請求失敗 (404 Not Found)。請檢查 API URL ('v1beta') 和模型名稱 ('gemini-pro') 是否正確。`);
+                           throw new Error(`API 請求失敗 (404 Not Found)。請檢查模型名稱 ('gemini-1.5-flash') 是否正確。`);
                        }
                        throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
                   }
@@ -380,7 +380,7 @@
                   const result = await response.json();
                   const candidate = result.candidates?.[0];
 
-                  // 增加一個安全檢查，以防 'gemini-pro' 因安全設定而拒絕回答
+                  // 增加一個安全檢查
                   if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
                        throw new Error(`AI 未能生成有效內容，原因：${candidate.finishReason}。 (可能是安全設定阻擋)`);
                   }
@@ -461,6 +461,10 @@
             return selectedParagraphs.join('\n\n');
         }
 
+        // ====================================================
+        // == 程式碼修正區域 (generateQuizWithRetry) ==
+        // ====================================================
+        
         // 生成測驗功能
         async function generateQuizWithRetry(text) {
             loadingIndicator.classList.remove('hidden');
@@ -479,7 +483,7 @@
                 return;
             }
 
-            let systemPrompt, schema;
+            let systemPrompt;
             
             // 根據檢測到的語言動態調整指令
             const langInstruction = (detectedLanguage.includes('Chinese') || detectedLanguage === '中文') 
@@ -488,57 +492,62 @@
             
             const mustBeInLang = `All questions, reading material, options, and answers must be strictly in ${langInstruction}.`;
 
+            // ✨ 修正 1: 建立 JSON 結構的文字描述，因為不能用 schema 了
+            let schemaDescription = '';
+
             switch (quizType) {
                 case 'multiple':
-                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} multiple-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are derived from the provided text. Each question must have four options, which may include multiple correct answers. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
-                    schema = {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "ARRAY", items: { type: "STRING" } } },
-                            required: ["question", "options", "answer"]
-                        }
-                    };
+                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} multiple-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are derived from the provided text. Each question must have four options, which may include multiple correct answers. ${mustBeInLang}`;
+                    schemaDescription = `Your output must be strictly in JSON format: an array of objects, where each object has keys "question" (string), "options" (array of strings), and "answer" (array of strings).`;
                     break;
                 case 'group':
-                    systemPrompt = `You are a professional teacher. First, extract and condense a core paragraph best suited for quizzing, which will serve as the "Reading Material," based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Then, design ${numQuestions} related single-choice questions based on this "Reading Material." Your output must be strictly in JSON format, containing a readingMaterial key and a questions key (whose value is an array of ${numQuestions} question objects). ${mustBeInLang}`;
-                    schema = {
-                        type: "OBJECT",
-                        properties: {
-                            readingMaterial: { type: "STRING" },
-                            questions: {
-                                type: "ARRAY",
-                                items: {
-                                    type: "OBJECT",
-                                    properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
-                                    required: ["question", "options", "answer"]
-                                }
-                            }
-                        }
-                    };
+                    systemPrompt = `You are a professional teacher. First, extract and condense a core paragraph best suited for quizzing, which will serve as the "Reading Material," based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Then, design ${numQuestions} related single-choice questions based on this "Reading Material." ${mustBeInLang}`;
+                    schemaDescription = `Your output must be strictly in JSON format: a single object with a "readingMaterial" (string) key, and a "questions" (array of objects) key. Each object in "questions" must have keys "question" (string), "options" (array of strings), and "answer" (string).`;
                     break;
                 case 'single':
                 default:
-                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} single-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are strictly derived from the provided text. Each question must have four options, with only one correct answer. Ensure the questions are highly relevant to the text content. Your output must be strictly in JSON format, an array containing ${numQuestions} question objects. ${mustBeInLang}`;
-                    schema = {
-                        type: "ARRAY",
-                        items: {
-                            type: "OBJECT",
-                            properties: { question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, answer: { type: "STRING" } },
-                            required: ["question", "options", "answer"]
-                        }
-                    };
+                    systemPrompt = `You are a professional teacher. Your task is to generate ${numQuestions} single-choice questions based on the provided "randomly sampled text" (about ${sampleCount} paragraphs). Ensure all your questions are strictly derived from the provided text. Each question must have four options, with only one correct answer. Ensure the questions are highly relevant to the text content. ${mustBeInLang}`;
+                    schemaDescription = `Your output must be strictly in JSON format: an array of objects, where each object has keys "question" (string), "options" (array of strings), and "answer" (string).`;
                     break;
             }
 
+            // ✨ 修正 2: 將所有指令合併到一個使用者提示中
+            const fullUserPrompt = `${systemPrompt}
+
+${schemaDescription}
+
+IMPORTANT: Respond ONLY with the raw JSON text, starting with { or [, and ending with } or ]. Do not include any other text, greetings, or markdown formatting like \`\`\`json.
+
+Here is the "randomly sampled text":
+---START TEXT---
+${sampledContent}
+---END TEXT---
+
+Generate the JSON output now.`;
+
+            // ✨ 修正 3: 建立一個不含 v1beta 功能的 payload
             const payload = {
-                contents: [{ parts: [{ text: sampledContent }] }], 
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { responseMimeType: "application/json", responseSchema: schema }
+                contents: [{ parts: [{ text: fullUserPrompt }] }]
+                // 移除 systemInstruction
+                // 移除 generationConfig
             };
 
             try {
-                const jsonText = await callGemini(payload);
+                let jsonText = await callGemini(payload);
+
+                // ✨ 修正 4: 加入 JSON 清理邏輯
+                // 尋找 `json` 標籤、 {..} 或 [..]
+                const jsonMatch = jsonText.match(/```json\n([\s\S]*?)\n```|({[\s\S]*})|(\[[\s\S]*\])/m);
+                
+                if (!jsonMatch) {
+                    console.error("AI Did Not Return JSON:", jsonText);
+                    throw new Error("AI 未能回傳有效的 JSON 格式。");
+                }
+                
+                // 優先使用 ```json 區塊, 其次是 {..} , 最後是 [..]
+                jsonText = jsonMatch[1] || jsonMatch[2] || jsonMatch[3];
+                // ✨ JSON 清理結束 ✨
+
                 const quizData = JSON.parse(jsonText);
                 displayQuiz(quizData, quizType); 
             } catch (error) {
@@ -548,6 +557,11 @@
             }
         }
         
+        // ===================================
+        // == 程式碼修正區域 (結束) ==
+        // ===================================
+
+
         // 答案解釋功能
         async function explainAnswer(button, context, question, answer) {
              button.disabled = true;
