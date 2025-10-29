@@ -291,15 +291,9 @@
                 detectedLanguage = language.trim().charAt(0).toUpperCase() + language.trim().slice(1);
                 console.log(`Detected Language: ${detectedLanguage}`);
             } catch (error) {
-                // ===================================
-                // == 程式碼修正區域 ==
-                // ===================================
                 // 如果偵測失敗（例如 API 金鑰錯誤），預設為 'English'
                 console.warn(`Language detection failed, defaulting to 'English'. Error: ${error.message}`);
                 detectedLanguage = 'English';
-                // ===================================
-                // == 程式碼修正區域 (結束) ==
-                // ===================================
             }
         }
 
@@ -336,6 +330,10 @@
              if (fileContent) generateQuizWithRetry(fileContent);
         });
 
+        // ===================================
+        // == 程式碼修正區域 (callGemini) ==
+        // ===================================
+
         // 通用 Gemini API 呼叫函式
         async function callGemini(payload, retries = 3, delay = 1000) {
              const userApiKey = apiKeyInput.value.trim();
@@ -348,8 +346,10 @@
                    localStorage.setItem('geminiApiKey', userApiKey);
              }
 
-// 正確的新程式碼
-const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${userApiKey}`;
+             // ✨✨✨ 修正點：堅持 v1beta，但改用 gemini-pro 模型 ✨✨✨
+             // 'gemini-pro' 是 v1beta 端點上的標準模型，保證支援 systemInstruction 和 JSON 模式
+             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${userApiKey}`;
+
              try {
                   const response = await fetch(apiUrl, {
                        method: 'POST',
@@ -364,14 +364,27 @@ const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-f
                        if (response.status === 400 && errorBody.error?.message.includes('API key not valid')) {
                             throw new Error(`API 金鑰無效，請檢查後再試。`);
                        }
+                       // 處理 400 Beta 功能錯誤
+                       if (response.status === 400 && errorBody.error?.message.includes('Unknown name')) {
+                           throw new Error(`API 請求失敗 (400 Bad Request)。您可能正試圖在 'v1' 端點使用 'v1beta' 的功能 (如 systemInstruction)。請檢查 API URL。`);
+                       }
                        if (response.status === 403) {
                             throw new Error(`API 請求被拒絕 (403 Forbidden)。請檢查 API 金鑰是否設置了 HTTP 引用網址限制，並確保您的 GitHub Pages 網址已包含在允許列表中。`);
+                       }
+                       if (response.status === 404) {
+                           throw new Error(`API 請求失敗 (404 Not Found)。請檢查 API URL ('v1beta') 和模型名稱 ('gemini-pro') 是否正確。`);
                        }
                        throw new Error(`API 請求失敗，狀態碼： ${response.status}。詳情：${errorBody.error?.message || '未知錯誤'}`);
                   }
                   
                   const result = await response.json();
                   const candidate = result.candidates?.[0];
+
+                  // 增加一個安全檢查，以防 'gemini-pro' 因安全設定而拒絕回答
+                  if (candidate?.finishReason && candidate.finishReason !== 'STOP') {
+                       throw new Error(`AI 未能生成有效內容，原因：${candidate.finishReason}。 (可能是安全設定阻擋)`);
+                  }
+
                   if (candidate?.content?.parts?.[0]?.text) {
                        return candidate.content.parts[0].text;
                   } else {
@@ -388,6 +401,11 @@ const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-f
                   }
              }
         }
+
+        // ===================================
+        // == 程式碼修正區域 (結束) ==
+        // ===================================
+
 
         // 總結文章功能
         async function summarizeTextWithRetry(text) {
@@ -651,10 +669,6 @@ const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-f
             return element;
         }
 
-        // ===================================
-        // == 程式碼修正區域 (開始) ==
-        // ===================================
-
         // 檢查單選答案 (修正版)
         function checkSingleAnswer(selectedButton, correctAnswer, context) {
             const optionsContainer = selectedButton.parentElement;
@@ -743,10 +757,6 @@ const apiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-f
             showExplanationButton(optionsContainer);
         }
 
-        // ===================================
-        // == 程式碼修正區域 (結束) ==
-        // ===================================
-        
         function showExplanationButton(container) {
              const questionElement = container.closest('.p-6');
              questionElement.querySelector('.explain-btn').classList.remove('hidden');
